@@ -5,14 +5,14 @@ import os
 from pathlib import Path
 import signal
 import threading
-from .sync import run_sync, atomic_json
+from .sync import run_sync, atomic_json, render_cached
 
 stop=threading.Event()
 def halt(_signal,_frame):stop.set()
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('mode',choices=['once','loop'])
+    parser.add_argument('mode',choices=['once','loop','render'])
     options=parser.parse_args()
     signal.signal(signal.SIGTERM,halt)
     signal.signal(signal.SIGINT,halt)
@@ -20,6 +20,15 @@ def main():
     state_dir=Path(os.environ.get('SYNC_STATE_DIR','/state'))
     cookie_file=Path(os.environ.get('FE_MOODLE_SESSION_FILE','/run/secrets/moodle-session-cookies.json'))
     state_dir.mkdir(parents=True,exist_ok=True)
+    if options.mode=='render':
+        try:
+            outcome=render_cached(fe_root,state_dir)
+            print(json.dumps({'status':'ok','navigation':outcome},ensure_ascii=False),flush=True)
+            return 0
+        except Exception as exc:
+            print(json.dumps({'status':'failed','error_type':type(exc).__name__,
+                'reason':str(exc)[:220]},ensure_ascii=False),flush=True)
+            return 1
     interval=max(300,int(os.environ.get('SYNC_INTERVAL_SECONDS','7200')))
     while not stop.is_set():
         summary=run_sync(fe_root,state_dir/'files.sqlite',cookie_file,

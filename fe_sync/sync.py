@@ -238,8 +238,8 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
             summary['navigation']=build_site(root,courses,module_lists,state.list_files(),utcnow())
         except (OSError,ValueError,KeyError) as e:
             result.errors+=1
-            summary['navigation']={'error_type':type(e).__name__}
-            print(f'Local navigation error: {type(e).__name__}',flush=True)
+            summary['navigation']={'error_type':type(e).__name__,'reason':str(e)[:200]}
+            print(f'Local navigation error: {type(e).__name__}: {str(e)[:200]}',flush=True)
         summary['status']='ok' if result.errors==0 else 'partial'
     except Exception as e:
         summary['status']='failed'
@@ -250,3 +250,37 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
         summary['files']=vars(result)
         state.close()
     return summary
+
+
+def render_cached(root: Path, state_dir: Path) -> dict:
+    """Rebuild owned offline HTML from cached manifests; no Moodle calls."""
+    from .pages import build_site
+    status=json.loads((state_dir/'status.json').read_text(encoding='utf-8'))
+    entries=status.get('subjects',[])
+    if not isinstance(entries,list) or not entries:
+        raise ValueError('no cached subjects found in status.json')
+    courses=[]
+    module_lists={}
+    seen=set()
+    for entry in entries:
+        ident=entry.get('id')
+        name=entry.get('title')
+        if type(ident) is not int or ident<=0 or ident in seen or not isinstance(name,str):
+            raise ValueError('invalid cached course reference')
+        seen.add(ident)
+        course={'id':ident,'title':name}
+        manifest=root/course_dir(course)/'predmet.json'
+        info=json.loads(manifest.read_text(encoding='utf-8'))
+        if info.get('id')!=ident or info.get('title')!=name or not isinstance(info.get('modules'),list):
+            raise ValueError(f'invalid course manifest: {ident}')
+        course['shortname']=info.get('shortname','')
+        courses.append(course)
+        module_lists[ident]=info['modules']
+    db_path=state_dir/'files.sqlite'
+    con=sqlite3.connect(f'file:{db_path}?mode=ro',uri=True)
+    con.row_factory=sqlite3.Row
+    try:
+        records=[dict(r) for r in con.execute('SELECT rel_path FROM files')]
+    finally:
+        con.close()
+    return build_site(root,courses,module_lists,records,utcnow())

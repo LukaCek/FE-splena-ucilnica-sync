@@ -58,6 +58,20 @@ class Links(HTMLParser):
             self.items.append((self.href,label));self.href=None;self.label=[]
 
 
+def clean_section_title(value: str) -> str:
+    """Strip Moodle control labels from course section headings."""
+    label=re.sub(r'\s+', ' ', value or '').strip()
+    prefix='Izberi poglavje '
+    if label.startswith(prefix):
+        label=label[len(prefix):]
+        label=label.split(' Skrči Razširi ',1)[0]
+    elif label.startswith('Skrči Razširi '):
+        label=label[len('Skrči Razširi '):]
+    if not label or label in ('Skrči','Razširi','Skrči vse','Razširi vse'):
+        return ''
+    return label[:180].strip()
+
+
 class CourseOutlineParser(HTMLParser):
     """Extract Moodle course sections and module links without executing remote JS.
 
@@ -145,8 +159,8 @@ class CourseOutlineParser(HTMLParser):
         output=[]
         for value in self.modules.values():
             current=value.pop('_section',None)
-            if current is not None and current['title']:
-                value['section_title']=current['title']
+            if current is not None and clean_section_title(current['title']):
+                value['section_title']=clean_section_title(current['title'])
                 value['section_order']=current['order']
             output.append(value)
         return output

@@ -159,9 +159,22 @@ Zunanje povezave s sejnimi podatki se zavračajo, prenosi so omejeni na e.FE in 
 
 ### Nadgradnja beta 1.1 → beta 1.2
 
-V TrueNAS Custom App → **Edit** zamenjaj le `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.1` z `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.2`.
+V TrueNAS Custom App → **Edit** zamenjaj le `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.1` z `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.2.1`.
 Shrani spremembo, počakaj na prvi ciklus oziroma ga sproži z
 `sudo docker exec ix-fe-moodle-sync-fe-moodle-sync-1 python -m fe_sync once`
 (po potrebi preveri, da ne teče drug cikel hkrati). Ni treba brisati baze ali ponovno prenašati že shranjenih PDF-jev.
 
 HTML se posodobi po uspešni sinhronizaciji. Ob iztečeni seji ostane zadnja lokalna kopija; obnoviti je treba sejo, preden se osveži.
+
+## beta1.2.1: popravek HTML in offline ponovna izdelava
+
+Prej je program iskal lastno oznako HTML samo v prvih 1800 znakih,
+oznaka pa je bila za obsežnim CSS. Zato ni mogel posodobiti lastnih strani.
+Sedaj preveri celotno datoteko in še vedno ne prepiše uporabnikovega HTML.
+
+Brez Moodlove seje lahko HTML takoj obnoviš iz predhodno shranjenih
+predmet.json in SQLite z ukazom:
+
+    sudo docker exec ix-fe-moodle-sync-fe-moodle-sync-1 python -m fe_sync render
+
+Naslovi razdelkov ne vsebujejo več Moodlovih gumbov Izberi poglavje/Skrči/Razširi.
