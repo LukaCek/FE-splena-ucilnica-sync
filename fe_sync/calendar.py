@@ -136,6 +136,13 @@ def write_calendar_ics(root,body:str)->None:
         if 'X-FE-MOODLE-SYNC:1' not in existing:
             raise ValueError('refusing to overwrite user-owned calendar')
         if existing==body:return
+        # DTSTAMP reflects the export time, but an unchanged calendar must
+        # not trigger a new Syncthing transfer on every scheduled cycle.
+        def without_export_stamp(value):
+            return re.sub(r'^DTSTAMP:[0-9]{8}T[0-9]{6}Z$', '',
+                          value.replace('\\r\\n','\\n'), flags=re.M)
+        if without_export_stamp(existing)==without_export_stamp(body):
+            return
     fd,temp=tempfile.mkstemp(prefix='.fe-calendar-',dir=dest.parent)
     try:
         with os.fdopen(fd,'w',encoding='utf-8',newline='') as stream:
