@@ -188,6 +188,26 @@ def html_module(module:dict,root:Path,course:dict,records:list[dict],index_dir:P
                     f'<div class="activity-text"><a class="activity-title" href="{e(href)}">{e(title)}</a>'
                     f'<div class="activity-sub">{e(local_file.name)}</div></div>'
                     '<span class="status local">lokalno</span></div></div>',1)
+    # Local text snapshots of Moodle pages and announcement forums.
+    # Always verify this is an owned generated file, not a user's notes.
+    if kind in ('page','forum'):
+        from .content import page_dir,forum_dir,is_announcement
+        if kind=='page' or is_announcement(module):
+            relative=(page_dir(module) if kind=='page' else forum_dir(module))
+            local_path=root/course_dir(course)/relative/'index.html'
+            if local_path.is_file() and not local_path.is_symlink():
+                try:
+                    owned=MARKER in local_path.read_text(encoding='utf-8',errors='replace')
+                except OSError:
+                    owned=False
+                if owned:
+                    href=local_href(index_dir,local_path)
+                    label='lokalna stran' if kind=='page' else 'lokalna obvestila'
+                    return (f'<div class="activity" id="mod-{e(ident)}" data-activity data-availability="local" '
+                            f'data-search="{e(title)}"><div class="activity-row">{icon}'
+                            f'<div class="activity-text"><a class="activity-title" href="{e(href)}">{e(title)}</a>'
+                            f'<div class="activity-sub">{e(label)}</div></div>'
+                            '<span class="status local">lokalno</span></div></div>',1)
     if kind!='folder':
         external=(f'<a class="activity-title" href="{e(online)}" target="_blank" rel="noopener noreferrer">{e(title)}</a>'
                   if online else f'<span class="activity-title">{e(title)}</span>')
