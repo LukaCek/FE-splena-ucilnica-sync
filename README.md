@@ -178,3 +178,28 @@ predmet.json in SQLite z ukazom:
     sudo docker exec ix-fe-moodle-sync-fe-moodle-sync-1 python -m fe_sync render
 
 Naslovi razdelkov ne vsebujejo več Moodlovih gumbov Izberi poglavje/Skrči/Razširi.
+
+
+## beta1.2.2: odprava neusklajenih datotek na Androidu
+
+Androidova skupna shramba ne sprejema nekaterih znakov v imenih map,
+med drugim \`?\`. Starejše izdaje so za Moodle mapo
+\`Kaj rešujemo na vajah? (skupini 2 in 6)__144739\` ustvarile ime,
+ki ga Syncthing na tablici ne more ustvariti.
+
+- Moodle mape imajo zdaj prenosljiva imena brez \`?"*/:<>\\|\`;
+  unikatni Moodle ID na koncu imena ostaja enak.
+- Pri naslednjem avtomatskem ciklu \`loop\` se obstoječe mape,
+  ki jih upravlja program, varno preimenujejo in v SQLite popravijo
+  relativne poti, zato HTML ohrani lokalne povezave.
+- Pred selitvijo program preveri, da so **vse** datoteke evidentirane in
+  SHA-256 nespremenjene. Če so ročno urejene, dodane ali manjkajo,
+  selitev preskoči z napako in jih ne spreminja.
+- Za prvo nadgradnjo uporabi oznako slike \`beta1.2.2\`
+  in pusti FE Syncthing mape, \`/state\` ter sejno datoteko nespremenjene.
+- Po prvem uspešnem ciklu preveri \`portable_paths_migrated\` v
+  \`/state/status.json\` (pričakovanih osem v problematični Moodle mapi).
+  Syncthing naj nato ponovno pregleda FE mapo na NAS-u in tablici.
+
+Opomba: \`python -m fe_sync render\` sam ne izvaja selitve in ne
+nadomešča Moodle sinhronizacije; migracija se zgodi med ciklom \`loop\`.
