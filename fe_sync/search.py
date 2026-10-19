@@ -65,9 +65,10 @@ def _note_text(path:Path)->str:
 
 
 def search_entries(root:Path,courses:list[dict],module_lists:dict[int,list[dict]],
-                   records:list[dict])->list[dict]:
+                   records:list[dict],pdf_terms:dict[str,str]|None=None)->list[dict]:
     """Validate destinations, avoid symlink escapes and never index session data."""
     result=[]
+    pdf_terms=pdf_terms or {}
     for course in courses:
         course_id=course['id']
         name=course['title']
@@ -81,9 +82,14 @@ def search_entries(root:Path,courses:list[dict],module_lists:dict[int,list[dict]
         # SQLite records are the only authority for downloaded Moodle files.
         for file in valid_stored_files(root,records,base):
             kind,badge=file_category(file)
-            result.append(dict(course_id=course_id,course=name,kind=kind,
-                               badge=badge,label=file.name,target=file,
-                               search=f'{name} {file.relative_to(course_root).as_posix()}'))
+            record=dict(course_id=course_id,course=name,kind=kind,
+                        badge=badge,label=file.name,target=file,
+                        search=f'{name} {file.relative_to(course_root).as_posix()}')
+            if kind=='pdf':
+                # Pre-extracted, bounded *words*. Never do PDF extraction in
+                # the HTML renderer or browser. Only indexer-owned words enter.
+                record['pdf_terms']=pdf_terms.get(file.relative_to(root).as_posix(),'')
+            result.append(record)
         for module in module_lists.get(course_id,[]):
             if not isinstance(module,dict):continue
             mtype=module.get('type')
@@ -129,11 +135,11 @@ def search_entries(root:Path,courses:list[dict],module_lists:dict[int,list[dict]
 
 
 def render_search(root:Path,courses:list[dict],module_lists:dict[int,list[dict]],
-                  records:list[dict],updated:str)->dict:
+                  records:list[dict],updated:str,pdf_terms:dict[str,str]|None=None)->dict:
     """Render searchable rows directly into HTML for robust file:// behavior."""
     relative=Path('Spletna-ucilnica/ISKANJE.html')
     home=root/'Spletna-ucilnica'
-    entries=search_entries(root,courses,module_lists,records)
+    entries=search_entries(root,courses,module_lists,records,pdf_terms=pdf_terms)
     items=[]
     for ent in entries:
         target=ent['target']
@@ -141,10 +147,12 @@ def render_search(root:Path,courses:list[dict],module_lists:dict[int,list[dict]]
         href=target if external else local_href(home,target)
         course_id=str(ent['course_id'])
         attrs=(' target="_blank" rel="noopener noreferrer"' if external else '')
+        words=ent.get('pdf_terms','')
+        pdf_attr=(f' data-pdf-terms="{e(words)}"' if words else '')
         items.append(
             f'<li class="search-item" data-result data-kind="{e(ent["kind"])}" '
             f'data-course="{e(course_id)}" '
-            f'data-search="{e(ent["search"])}">'
+            f'data-search="{e(ent["search"])}"{pdf_attr}>'
             f'<span class="result-kind">{e(ent["badge"])}</span>'
             '<span class="result-detail">'
             f'<a href="{e(href)}"{attrs}>{e(ent["label"])}</a>'
@@ -156,8 +164,12 @@ def render_search(root:Path,courses:list[dict],module_lists:dict[int,list[dict]]
         '<div class="page-title"><h1>Iskanje po vseh predmetih</h1></div>'
         '<main id="content" class="course-shell">'
         '<p class="muted-info">Vsebina te strani je shranjena neposredno v HTML in deluje tudi brez interneta. '
-        'Išče po imenih gradiv in po besedilu prepoznanih arhiviranih Moodle strani. '
-        'Ne preiskuje celotnega besedila PDF-jev in tvojih osebnih zapiskov.</p>'
+        'Išče po imenih gradiv, po prepoznanih arhiviranih Moodle straneh in po '
+        '<strong>besedah iz besedilnih PDF-jev</strong>. Več iskanih besed se mora '
+        'pojaviti v istem dokumentu, ne nujno zaporedoma. '
+        'Skenirani PDF-ji brez besedilne plasti zahtevajo OCR in niso vključeni; '
+        'zelo veliki ali obsežni PDF-ji so lahko obdelani le delno. '
+        'Ne preiskuje tvojih osebnih zapiskov.</p>'
         '<div class="search-controls">'
         '<label for="globalSearch">Iskalni niz'
         '<input id="globalSearch" type="search" placeholder="Npr. kolokvij, PDF, elektrotehnika ..." '
@@ -178,4 +190,5 @@ def render_search(root:Path,courses:list[dict],module_lists:dict[int,list[dict]]
               search_href='ISKANJE.html')
     write_generated(root,relative,html)
     return {'items':len(entries),'home':relative.as_posix(),
-            'embedded':True,'limited':len(entries)>=MAX_RESULTS}
+            'embedded':True,'limited':len(entries)>=MAX_RESULTS,
+            'pdf_word_entries':sum(bool(ent.get('pdf_terms')) for ent in entries)}
