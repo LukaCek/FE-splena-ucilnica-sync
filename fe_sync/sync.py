@@ -534,10 +534,18 @@ def render_cached(root: Path, state_dir: Path) -> dict:
     con=sqlite3.connect(f'file:{db_path}?mode=ro',uri=True)
     con.row_factory=sqlite3.Row
     try:
-        records=[dict(r) for r in con.execute(
-            'SELECT remote_key,rel_path,sha256,size_bytes FROM files')]
-        from .pdf_index import cached_terms
-        pdf_terms=cached_terms(root,con,records,courses)
+        columns={row[1] for row in con.execute('PRAGMA table_info(files)')}
+        required={'remote_key','rel_path','sha256','size_bytes'}
+        if required.issubset(columns):
+            records=[dict(r) for r in con.execute(
+                'SELECT remote_key,rel_path,sha256,size_bytes FROM files')]
+            from .pdf_index import cached_terms
+            pdf_terms=cached_terms(root,con,records,courses)
+        else:
+            # Older cached fixtures/databases can still regenerate HTML
+            # navigation by filename. No unsafe legacy PDF text adoption.
+            records=[dict(r) for r in con.execute('SELECT rel_path FROM files')]
+            pdf_terms={}
     finally:
         con.close()
     return build_site(root,courses,module_lists,records,utcnow(),pdf_terms=pdf_terms)
