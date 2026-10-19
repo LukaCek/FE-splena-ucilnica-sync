@@ -58,6 +58,48 @@ STYLE = r'''
 @media(max-width:560px){.header-inner{padding:10px 12px;flex-wrap:wrap;gap:8px}.top-links{order:3;width:100%;gap:13px}.top-right{font-size:10px}.redbar-inner{padding:0 6px}.redbar .tab,.redbar span{padding:0 10px;font-size:11px}.container{padding:0 8px 32px}.course-shell{border-radius:5px;padding:9px 9px 14px}.page-title{padding:8px 8px 14px;align-items:flex-start;flex-direction:column;gap:5px}.page-title h1{font-size:21px}.activities{padding:0 0 13px}.activity-row{padding:8px}.status{font-size:10px}.folder-content{padding-left:15px}.coursegrid{grid-template-columns:1fr;gap:7px}.filterbar input{width:100%}}
 '''
 
+
+STYLE += r'''
+/* beta1.7: responsive offline search, pinned courses and local calendar */
+.top-links{gap:15px}
+.search-controls{display:grid;grid-template-columns:minmax(0,2fr) repeat(2,minmax(145px,1fr));gap:12px;margin:18px 0 8px;align-items:end}
+.search-controls label{font-size:12px;color:#4c5865;font-weight:600;display:flex;flex-direction:column;gap:5px}
+.search-controls input,.search-controls select{min-width:0;width:100%;height:40px;padding:7px 10px;font:inherit;font-size:13px;color:#27323c;background:white;border:1px solid #cbd2d8;border-radius:7px}
+.search-controls input:focus,.search-controls select:focus{outline:2px solid #87aec7;outline-offset:1px}
+.search-counter{font-size:12px;color:#65717d;border-bottom:1px solid #e4e9eb;margin:15px 0 0;padding-bottom:12px}
+.search-results{list-style:none;margin:0;padding:0}
+.search-item{display:flex;align-items:center;gap:13px;border-bottom:1px solid #eef0f2;padding:11px 5px;min-width:0}
+.search-item:last-child{border-bottom:0}
+.search-item[hidden]{display:none}
+.result-kind{flex:0 0 85px;text-align:center;font-size:10px;background:#eff4f8;color:#385e7c;padding:5px 6px;border-radius:5px;font-weight:600}
+.result-detail{display:flex;flex-direction:column;gap:3px;min-width:0;overflow-wrap:anywhere}
+.result-detail a{font-size:13px;font-weight:600}
+.result-detail small{color:#6a7780;font-size:11px}
+.search-empty{padding:20px;color:#74808c}
+.course-card{position:relative;display:flex;align-items:stretch;padding:0}
+.course-card .course-card-link{display:block;flex:1;padding:18px 46px 18px 18px;color:#252b32;min-width:0}
+.course-card .course-card-link:hover{text-decoration:none}
+.course-card .favorite-button{position:absolute;top:9px;right:9px;width:34px;height:34px;display:grid;place-items:center;background:#fff;border:1px solid transparent;border-radius:7px;color:#566674;font-size:23px;cursor:pointer}
+.course-card .favorite-button:hover,.course-card .favorite-button:focus-visible{border-color:#b7cbd7;background:#f5f9fb}
+.course-card .favorite-button[aria-pressed="true"]{color:#b17c00}
+.course-card.favorite{border-color:#edcf8e;background:#fffdf7}
+.favorite-help{font-size:11px;color:#73808b;margin:9px 0 0}
+.calendar-day{margin:16px 0 20px;border:1px solid #e7eaed;border-radius:9px;overflow:hidden}
+.calendar-day h2{font-size:13px;margin:0;background:#f4f7f9;padding:11px 14px;color:#445666}
+.calendar-event{display:flex;gap:12px;align-items:flex-start;border-top:1px solid #eff0f2;padding:12px 14px}
+.calendar-event[hidden]{display:none}
+.calendar-time{flex:0 0 112px;font-size:12px;color:#596776;font-weight:600}
+.calendar-event-info{display:flex;flex-direction:column;gap:4px;min-width:0}
+.calendar-event-info small{font-size:11px;color:#7a8590}
+.calendar-kind{font-size:10px;border-radius:9px;background:#eaf0f5;color:#486a85;padding:2px 7px;margin-left:5px}
+.calendar-kind.due{background:#fff0df;color:#946115}
+.calendar-controls{display:flex;gap:9px;flex-wrap:wrap;margin:15px 0}
+.calendar-controls button{border:1px solid #cdd8e0;background:#fff;padding:7px 12px;color:#4a5764;font:inherit;cursor:pointer;border-radius:6px}
+.calendar-controls button[aria-pressed="true"]{color:#fff;background:#355b75;border-color:#355b75}
+@media(max-width:860px){.search-controls{grid-template-columns:1fr 1fr}.search-controls label:first-child{grid-column:span 2}}
+@media(max-width:560px){.search-controls{grid-template-columns:1fr;gap:10px}.search-controls label:first-child{grid-column:span 1}.result-kind{flex-basis:68px}.course-card .course-card-link{padding:15px 42px 15px 13px}.calendar-time{flex-basis:85px}.calendar-event{gap:8px;padding:10px}.top-links{gap:10px}}
+'''
+
 SCRIPT = r'''
 function filterItems(){
  const search=document.getElementById('filterSearch');
@@ -84,6 +126,83 @@ function filterItems(){
 }
 '''
 
+
+SCRIPT += r'''
+/* No network, fetch(), or external JS. Works with local file:// copies. */
+function normalizeSearch(value){
+ return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('sl');
+}
+function filterGlobalResults(){
+ const input=document.getElementById('globalSearch');
+ if(!input)return;
+ const words=normalizeSearch(input.value).trim().split(/\s+/).filter(Boolean);
+ const kind=(document.getElementById('searchKind')||{}).value||'all';
+ const course=(document.getElementById('searchCourse')||{}).value||'all';
+ let count=0;
+ document.querySelectorAll('[data-result]').forEach(item=>{
+  const search=normalizeSearch(item.dataset.search||'');
+  const match=words.every(word=>search.includes(word)) &&
+   (kind==='all'||item.dataset.kind===kind) &&
+   (course==='all'||item.dataset.course===course);
+  item.hidden=!match;
+  if(match)count++;
+ });
+ const label=document.getElementById('searchCount');
+ if(label)label.textContent=count===1?'1 zadetek':count+' zadetkov';
+ const empty=document.getElementById('searchEmpty');
+ if(empty)empty.hidden=count!==0;
+}
+const FE_FAVORITES_KEY='fe-moodle-favorites-v1';
+let feFavorites=new Set();
+function readFavorites(){
+ try{
+  const stored=JSON.parse(localStorage.getItem(FE_FAVORITES_KEY)||'[]');
+  if(Array.isArray(stored))feFavorites=new Set(stored.filter(x=>/^\d{1,10}$/.test(x)).slice(0,100));
+ }catch(_){feFavorites=new Set();}
+}
+function showFavorites(){
+ const grid=document.getElementById('courseGrid');
+ if(!grid)return;
+ const cards=Array.from(grid.querySelectorAll('[data-course-card]'));
+ cards.forEach(card=>{
+  const active=feFavorites.has(card.dataset.courseId);
+  card.classList.toggle('favorite',active);
+  const star=card.querySelector('.favorite-button');
+  if(star){
+   star.setAttribute('aria-pressed',active?'true':'false');
+   star.textContent=active?'★':'☆';
+   star.setAttribute('aria-label',(active?'Odstrani iz priljubljenih: ':'Dodaj med priljubljene: ')+card.dataset.courseName);
+  }
+ });
+ cards.sort((a,b)=>Number(feFavorites.has(b.dataset.courseId))-Number(feFavorites.has(a.dataset.courseId)));
+ cards.forEach(card=>grid.appendChild(card));
+}
+function toggleFavorite(id){
+ id=String(id);
+ if(feFavorites.has(id))feFavorites.delete(id);else feFavorites.add(id);
+ try{localStorage.setItem(FE_FAVORITES_KEY,JSON.stringify(Array.from(feFavorites)))}catch(_){}
+ showFavorites();
+}
+function filterCalendarEvents(kind){
+ document.querySelectorAll('[data-cal-filter]').forEach(btn=>{
+  btn.setAttribute('aria-pressed',btn.dataset.calFilter===kind?'true':'false');
+ });
+ let shown=0;
+ document.querySelectorAll('[data-calendar-event]').forEach(item=>{
+  const match=kind==='all'||item.dataset.calendarKind===kind;
+  item.hidden=!match;if(match)shown++;
+ });
+ document.querySelectorAll('[data-calendar-day]').forEach(day=>{
+  day.hidden=!day.querySelector('[data-calendar-event]:not([hidden])');
+ });
+ const message=document.getElementById('calendarCount');
+ if(message)message.textContent=shown===1?'1 dogodek':shown+' dogodkov';
+}
+readFavorites();
+showFavorites();
+filterGlobalResults();
+'''
+
 ICONS = {
  'folder':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 3h9v10H3z"/></svg>',
  'forum':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v13H9l-5 4zM8 9h8M8 12h6"/></svg>',
@@ -101,7 +220,7 @@ def local_href(current_dir: Path, target: Path) -> str:
     return quote(Path(os.path.relpath(target,current_dir)).as_posix(),safe='/')
 
 
-def page(title: str, content: str, updated: str, *, home: str = '', subject: bool = False, status_href: str = '', updates_href: str = '', calendar_href: str = '') -> str:
+def page(title: str, content: str, updated: str, *, home: str = '', subject: bool = False, status_href: str = '', updates_href: str = '', calendar_href: str = '', search_href: str = '') -> str:
     home=e(home or '#top')
     status_link=(f'<a href="{e(status_href)}">Zadnja osvežitev</a>' if status_href else '')
     links=(f'<a href="{home}">Domov</a><a href="{home}" class="current">Moji predmeti</a>'
@@ -111,6 +230,8 @@ def page(title: str, content: str, updated: str, *, home: str = '', subject: boo
         links+=f'<a href="{e(updates_href)}">Novosti</a>'
     if calendar_href:
         links+=f'<a href="{e(calendar_href)}">Koledar in roki</a>'
+    if search_href:
+        links+=f'<a href="{e(search_href)}">Išči gradiva</a>'
     red=('<a class="tab active" href="#content">Predmet</a>'
          '<span class="mutedtab" title="Samo na e.FE">Ocene</span>'
          '<span class="mutedtab" title="Samo na e.FE">Dejavnosti</span>'
@@ -293,7 +414,8 @@ def render_course(root:Path,course:dict,modules:list[dict],records:list[dict],ma
     return page(str(course['title']),body,updated,home=home,subject=True,
                 status_href=local_href(index_dir,root/'Spletna-ucilnica/STANJE.html'),
                 updates_href=local_href(index_dir,root/'Spletna-ucilnica/NOVOSTI.html'),
-                calendar_href=local_href(index_dir,root/'Spletna-ucilnica/KOLEDAR.html')),total
+                calendar_href=local_href(index_dir,root/'Spletna-ucilnica/KOLEDAR.html'),
+                search_href=local_href(index_dir,root/'Spletna-ucilnica/ISKANJE.html')),total
 
 
 def render_home(root:Path,courses:list[dict],course_totals:dict[int,int],updated:str)->str:
@@ -303,20 +425,30 @@ def render_home(root:Path,courses:list[dict],course_totals:dict[int,int],updated
     for course in courses:
         target=root/course_dir(course)/'index.html'
         total=course_totals.get(course['id'],0)
-        cards.append(f'<a class="course-card" data-course-card data-search="{e(course["title"]+" "+course.get("shortname",""))}" '
-                     f'href="{e(local_href(base,target))}"><span class="course-arrow">›</span>'
-                     f'<h2>{e(course["title"])}</h2><small>{total} lokalnih datotek</small></a>')
+        cards.append(
+            f'<article class="course-card" data-course-card data-course-id="{e(course["id"])}" '
+            f'data-course-name="{e(course["title"])}" '
+            f'data-search="{e(course["title"]+" "+course.get("shortname",""))}">'
+            f'<a class="course-card-link" href="{e(local_href(base,target))}">'
+            f'<h2>{e(course["title"])}</h2><small>{total} lokalnih datotek</small></a>'
+            f'<button class="favorite-button" type="button" aria-pressed="false" '
+            f'aria-label="Dodaj med priljubljene: {e(course["title"])}" '
+            f'onclick="toggleFavorite(\'{e(course["id"])}\')">☆</button></article>')
     body=(f'<div class="breadcrumb">Moji predmeti</div><div class="page-title"><h1>Moji predmeti</h1></div>'
           f'<main id="content" class="course-shell"><p class="numbers">{len(courses)} predmetov · '
           f'{sum(course_totals.values())} lokalnih datotek · <a href="STANJE.html">Kdaj je bilo nazadnje osveženo?</a>'
           ' · <a href="NOVOSTI.html">Novosti v gradivih</a>'
-          ' · <a href="KOLEDAR.html">Koledar in roki</a></p><div class="filterbar">'
+          ' · <a href="KOLEDAR.html">Koledar in roki</a>'
+          ' · <a href="ISKANJE.html">Iskanje vseh gradiv</a></p><div class="filterbar">'
           '<input id="filterSearch" type="search" oninput="filterItems()" placeholder="Poišči predmet ..." '
           'aria-label="Poišči predmet"><span class="filter-note">Lokalni pregled e.FE</span></div>'
-          f'<div class="coursegrid">{"".join(cards)}</div>'
+          f'<div class="coursegrid" id="courseGrid">{"".join(cards)}</div>'
+          '<p class="favorite-help">Zvezdica pripne predmet na vrh na tej napravi. '
+          'Priljubljeni predmeti se hranijo v brskalniku in se ne sinhronizirajo prek Syncthinga.</p>'
           '<div id="noResults" class="no-results">Ni zadetkov.</div></main>')
     return page('Moji predmeti',body,updated,status_href='STANJE.html',
-                updates_href='NOVOSTI.html',calendar_href='KOLEDAR.html')
+                updates_href='NOVOSTI.html',calendar_href='KOLEDAR.html',
+                search_href='ISKANJE.html')
 
 
 def write_generated(root:Path,relative:Path,body:str)->None:
@@ -356,4 +488,7 @@ def build_site(root:Path,courses:list[dict],module_lists:dict[int,list[dict]],re
             raise ValueError(f'course {course["id"]} navigation: {str(exc)[:160]}') from exc
         totals[course['id']]=total
     write_generated(root,Path('Spletna-ucilnica/index.html'),render_home(root,courses,totals,updated))
-    return {'pages':len(courses)+1,'local_files_linked':sum(totals.values()),'home':'Spletna-ucilnica/index.html'}
+    from .search import render_search
+    search=render_search(root,courses,module_lists,records,updated)
+    return {'pages':len(courses)+1,'local_files_linked':sum(totals.values()),
+            'home':'Spletna-ucilnica/index.html','search':search}
