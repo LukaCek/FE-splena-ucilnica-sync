@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
+import logging
 import multiprocessing
 import re
 import sqlite3
@@ -32,6 +33,19 @@ MAX_WORKER_VMEM=384*1024*1024
 INDEX_VERSION=1
 # Do not log PDF text, professor names, URL tokens, file paths or private notes.
 PARTIAL_RESULTS=frozenset({'partial','no_text','unsupported','bad_pdf','timeout','ready'})
+
+
+class _RecoveredXrefWarningFilter(logging.Filter):
+    """Hide *only* pypdf's repetitive notice that it recovered a bad xref.
+
+    Unrelated warnings and errors remain visible. Parsing failures remain
+    exposed through pdf_index.bad_pdf, .timeout and .partial in status.json.
+    Installed in each PDF worker only, never on the whole app logger.
+    """
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not (record.levelno == logging.WARNING and
+                    record.getMessage().startswith('Ignoring wrong pointing object '))
+
 
 
 def normalize_words(text:str)->list[str]:
@@ -126,6 +140,12 @@ def _extract(path:Path)->tuple[str,str,int,int]:
 
 def _extract_worker(path:str,channel):
     """Untrusted PDF parsing happens in an isolated, memory-limited child."""
+    # pypdf._reader emits dozens of "Ignoring wrong pointing object" warnings
+    # for some Moodle PDFs with recoverable xref tables. Suppress precisely
+    # that notice, locally to this child, without masking other diagnostics.
+    reader_logger=logging.getLogger('pypdf._reader')
+    recovered_filter=_RecoveredXrefWarningFilter()
+    reader_logger.addFilter(recovered_filter)
     try:
         import resource
         resource.setrlimit(resource.RLIMIT_AS,(MAX_WORKER_VMEM,MAX_WORKER_VMEM))
@@ -134,6 +154,7 @@ def _extract_worker(path:str,channel):
         try:channel.send(('bad_pdf','',0,0))
         except (BrokenPipeError,OSError):pass
     finally:
+        reader_logger.removeFilter(recovered_filter)
         channel.close()
 
 
