@@ -125,7 +125,7 @@ def _decode(row):
     try:
         blob=row['compressed_terms']
         if not blob or len(blob)>MAX_COMPRESSED:return ''
-        expanded=zlib.decompress(blob,max_length=MAX_COMPRESSED*3+1)
+        expanded=zlib.decompressobj().decompress(blob,MAX_COMPRESSED*3+1)
         if len(expanded)>MAX_COMPRESSED*3:return ''
         return expanded.decode('utf-8')
     except (ValueError,TypeError,zlib.error,UnicodeError):
