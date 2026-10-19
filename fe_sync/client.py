@@ -58,20 +58,104 @@ class Links(HTMLParser):
             self.items.append((self.href,label));self.href=None;self.label=[]
 
 
+class CourseOutlineParser(HTMLParser):
+    """Extract Moodle course sections and module links without executing remote JS.
+
+    Moodle 3/4/5 themes vary; recognize explicit section wrappers rather than
+    assigning guessed section titles. Empty section metadata is not required by
+    the downloader, and modules keep the order seen on the original page.
+    """
+    def __init__(self, base: str = BASE):
+        super().__init__(convert_charrefs=True)
+        self.host=urlsplit(base).hostname
+        self.base=base
+        self.stack=[]
+        self.sections=[]
+        self.modules={}
+        self.link=None
+        self.heading=None
+
+    def _current_section(self):
+        for frame in reversed(self.stack):
+            if frame['section'] is not None:
+                return frame['section']
+        return None
+
+    @staticmethod
+    def _section_id(attrs):
+        classes=set(attrs.get('class','').casefold().split())
+        identity=attrs.get('id','')
+        is_section=(bool(re.fullmatch(r'section-[0-9]+',identity)) or
+                    attrs.get('data-for')=='section' or
+                    ('course-section' in classes and attrs.get('data-sectionnum','').isdigit()) or
+                    (attrs.get('data-sectionid','').isdigit() and 'section' in classes))
+        return identity if is_section else None
+
+    def handle_starttag(self,tag,raw_attrs):
+        # HTML void elements (img, input, br, ...) never receive closing tags.
+        # Without this they would corrupt nested section and link scopes.
+        if tag in {'img','br','hr','input','meta','link','source','wbr','area','base','embed','track','col'}:
+            return
+        attrs=dict(raw_attrs)
+        sid=self._section_id(attrs)
+        section=None
+        if sid is not None:
+            section={'title':'','order':len(self.sections)}
+            self.sections.append(section)
+        self.stack.append({'tag':tag,'section':section})
+        current=self._current_section()
+        classes=set(attrs.get('class','').casefold().split())
+        if (current is not None and self.heading is None and tag in ('h2','h3','h4','span','div') and
+            (classes.intersection({'sectionname','section-title','sectionname-wrapper'}) or
+             attrs.get('data-for') in ('section_title','section-title'))):
+            self.heading={'tag':tag,'section':current,'depth':len(self.stack),'text':[]}
+        if tag=='a':
+            self.link={'depth':len(self.stack),'href':attrs.get('href',''),'text':[], 'section':current}
+
+    def handle_data(self,data):
+        if self.heading is not None:self.heading['text'].append(data)
+        if self.link is not None:self.link['text'].append(data)
+
+    def handle_endtag(self,tag):
+        # Maintain nested tags and prevent a stray tag from clearing outer frames.
+        if self.link is not None and tag=='a' and len(self.stack)==self.link['depth']:
+            entry=self.link
+            u=urlsplit(urljoin(self.base+'/',entry['href']))
+            if (u.scheme=='https' and u.hostname==self.host and u.port in (None,443)
+                and not u.username and not u.password):
+                matched=MODULE_RE.fullmatch(u.path)
+                cid=parse_qs(u.query).get('id',[''])[0]
+                if matched and cid.isascii() and cid.isdecimal() and 0<int(cid)<2**31:
+                    key=(matched[1],int(cid))
+                    label=re.sub(r'\s+',' ',' '.join(entry['text'])).strip()[:180]
+                    data={'type':matched[1],'id':int(cid),'title':label}
+                    if entry['section'] is not None:
+                        data['_section']=entry['section']
+                    self.modules[key]=data
+            self.link=None
+        if (self.heading is not None and tag==self.heading['tag'] and
+            len(self.stack)==self.heading['depth']):
+            label=re.sub(r'\s+',' ',' '.join(self.heading['text'])).strip()
+            if label and not self.heading['section']['title']:
+                self.heading['section']['title']=label[:180]
+            self.heading=None
+        if self.stack and self.stack[-1]['tag']==tag:self.stack.pop()
+
+    def result(self):
+        output=[]
+        for value in self.modules.values():
+            current=value.pop('_section',None)
+            if current is not None and current['title']:
+                value['section_title']=current['title']
+                value['section_order']=current['order']
+            output.append(value)
+        return output
+
+
 def parse_modules(markup: str, base: str = BASE) -> list[dict]:
-    parser=Links();parser.feed(markup)
-    host=urlsplit(base).hostname
-    result={}
-    for href,label in parser.items:
-        u=urlsplit(urljoin(base+'/',href))
-        if u.scheme!='https' or u.hostname!=host or u.port not in (None,443) or u.username or u.password:
-            continue
-        m=MODULE_RE.fullmatch(u.path)
-        if not m: continue
-        cid=parse_qs(u.query).get('id',[''])[0]
-        if cid.isascii() and cid.isdecimal() and 0<int(cid)<2**31:
-            result[(m[1],int(cid))]={'type':m[1], 'id':int(cid),'title':label}
-    return list(result.values())
+    parser=CourseOutlineParser(base)
+    parser.feed(markup)
+    return parser.result()
 
 
 @dataclass(frozen=True)
