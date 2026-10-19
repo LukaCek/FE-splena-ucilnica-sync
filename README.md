@@ -1,4 +1,4 @@
-# FE Moodle Sync — beta 1.8
+# FE Moodle Sync — beta 1.8.1
 
 Enosmerno, samodejno arhiviranje **datotek iz Moodle map** [e.FE](https://ucilnica-fe.uni-lj.si) na osebni TrueNAS, kjer jih obstoječi FE Gradiva MCP lahko bere. Ločen servis, brez lokalnega AI ali Chromiuma v Dockerju.
 
@@ -469,3 +469,24 @@ so še vedno pravilno označeni.
   preveri \`pdf_index.pending\`: če je večji od 0, bodo preostali PDF-ji
   obdelani v naslednjih ciklih (privzeto vsakih 2 h). \`render\` samo
   prebere že pripravljen PDF predpomnilnik, ne prične novega indeksiranja.
+
+
+## beta1.8.1 — tišji dnevnik pypdf
+
+Nekateri PDF-ji vsebujejo nepravilne navzkrižne reference (xref), ki
+jih pypdf s \`strict=False\` zna samodejno prezreti in popraviti.
+Primer ponavljajočega se opozorila:
+\`Ignoring wrong pointing object 24 0 (offset 0)\`.
+
+Zdaj **samo izolirani proces bralnika PDF-ja** utiša natanko opozorila
+\`pypdf._reader\`, ki se začnejo z
+\`Ignoring wrong pointing object \`. Vsa **druga** pypdf opozorila in
+napake ostanejo vidna. Stanja \`pdf_index.bad_pdf\`,
+\`pdf_index.timeout\`, \`pdf_index.partial\`, \`pdf_index.no_text\`
+in \`pdf_index.pending\` se še naprej pošteno zbirajo v
+\`/state/status.json\` in statusni strani.
+
+Sprememba ne spreminja PDF-jev, SQLite predpomnilnika, pravic,
+sejnih piškotkov ali vsebine iskalnega indeksa. Če beta1.8 zaključi
+sinhronizacijo s statusom \`ok\` in poljem \`pdf_index\`, lahko ostane
+nameščena; beta1.8.1 je neobvezna izboljšava diagnostike.
