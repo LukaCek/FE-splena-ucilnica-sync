@@ -274,3 +274,34 @@ def test_status_page_explains_partial_first_run_pdf_index(tmp_path):
     assert '120/354' in txt and 'čaka 200' in txt
     assert 'brez besedila 30' in html
     assert 'ISKANJE.html' in html
+
+
+
+def test_recovered_xref_warning_is_only_suppressed_message(caplog):
+    """Do not hide genuinely malformed PDFs or other pypdf warnings."""
+    import logging
+    from fe_sync.pdf_index import _RecoveredXrefWarningFilter
+    reader=logging.getLogger('pypdf._reader')
+    notice=_RecoveredXrefWarningFilter()
+    with caplog.at_level(logging.WARNING,logger='pypdf._reader'):
+        reader.addFilter(notice)
+        try:
+            reader.warning('Ignoring wrong pointing object 24 0 (offset 0)')
+            reader.warning('PDF reference required recovery')
+            reader.error('Could not read PDF object')
+        finally:
+            reader.removeFilter(notice)
+    assert 'Ignoring wrong pointing object' not in caplog.text
+    assert 'PDF reference required recovery' in caplog.text
+    assert 'Could not read PDF object' in caplog.text
+
+
+def test_filter_leaves_all_other_pypdf_errors_untouched():
+    import logging
+    from fe_sync.pdf_index import _RecoveredXrefWarningFilter
+    notice=_RecoveredXrefWarningFilter()
+    def record(level,msg):
+        return logging.LogRecord('pypdf._reader',level,'reader.py',123,msg,(),None)
+    assert notice.filter(record(logging.WARNING,'Ignoring wrong pointing object 82 0 (offset 0)')) is False
+    assert notice.filter(record(logging.WARNING,'Incorrect startxref pointer(1)')) is True
+    assert notice.filter(record(logging.ERROR,'Ignoring wrong pointing object but fatal')) is True
