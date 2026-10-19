@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from html.parser import HTMLParser
 import re
+import time
+import requests
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 from .client import BASE, MoodleError, RemoteFile, safe_remote_path
@@ -84,8 +86,16 @@ def discover_resource_file(client, module_id: int) -> RemoteFile | None:
         raise ValueError('invalid resource module id')
     view = f'/mod/resource/view.php?id={module_id}'
     for _ in range(2):
-        with client.session.get(client.base + view, timeout=client.timeout,
-                                allow_redirects=False, stream=True) as response:
+        for attempt in range(3):
+            try:
+                response=client.session.get(client.base + view, timeout=client.timeout,
+                                            allow_redirects=False, stream=True)
+                break
+            except (requests.ConnectionError, requests.Timeout):
+                if attempt==2:
+                    raise
+                time.sleep(1 << attempt)
+        with response:
             code = response.status_code
             if code in (301, 302, 303, 307, 308):
                 location = response.headers.get('Location', '')

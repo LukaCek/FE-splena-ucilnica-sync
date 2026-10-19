@@ -269,3 +269,26 @@ datotek. Za `resource` prvič počakaj na sinhronizacijski cikel.
 Možnost `once` ni primerna za vzporedni zagon s samodejnim ciklom.
 Gradnja v CI ne potrjuje dostopa do zasebnih gradiv e.FE; namen tega koraka
 je preverjanje na resnični namestitvi brez tveganja za spremembe v e.FE.
+
+
+## beta1.4.1 — odpornost na kratke prekinitve povezave
+
+Na prvi beta1.4 sinhronizaciji je bilo 19. 10. 2026 odkritih 132 Moodle
+resource dejavnosti, 130 obdelanih, 2 nepodprti. Prenesenih je bilo 103 novih
+datotek (397.550.678 bajtov); GET zadnjega predmeta je prekinil RemoteDisconnected.
+
+Popravek:
+- Idempotentne GET zahteve ponovi do 3-krat ob ConnectionError/Timeout
+  (premora 1 s in 2 s). POST, prijavnih/SSO napak in redirekcij ne ponavlja.
+- Če omrežje za posamezni predmet odpove tudi po ponovitvah, uporabi samo
+  prejšnji predmet.json za *lokalni prikaz* predmeta; označi ga kot `cached`,
+  ne kot novo pregledanega. Za predmete brez starega manifesta ničesar ne izmišlja.
+- Če odpove seznam datotek Moodle mape, nadaljuje z ostalimi mapami/predmeti.
+- Tudi ob delno uspešnem pregledu osveži lokalne HTML povezave na varno
+  shranjene datoteke in ohrani datum zadnje popolnoma uspešne sinhronizacije.
+- V status.json: `courses_unavailable`, `courses_from_cache`,
+  `folders_unavailable` ter `status=partial` za nedosegljivost.
+
+Namesti le `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.4.1`.
+Ne briši `files.sqlite`, PDF-jev ali prijavnih piškotkov. Po prvem
+avtomatskem ciklu preveri `status.json` in lokalni HTML.

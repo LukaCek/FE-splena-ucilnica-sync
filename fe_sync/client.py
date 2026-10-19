@@ -7,6 +7,7 @@ from pathlib import PurePosixPath
 from urllib.parse import urljoin, urlsplit, parse_qs, unquote, urlencode
 import json
 import re
+import time
 import requests
 
 BASE = 'https://ucilnica-fe.uni-lj.si'
@@ -214,7 +215,7 @@ class MoodleClient:
         self.host=p.hostname
         self.timeout=timeout
         self.session=requests.Session()
-        self.session.headers.update({'User-Agent':'FE-Moodle-Sync/beta1.4 (personal read-only archive)',
+        self.session.headers.update({'User-Agent':'FE-Moodle-Sync/beta1.4.1 (personal read-only archive)',
             'Accept':'text/html,application/json,application/octet-stream,*/*'})
         self.read_cookies(session_file)
 
@@ -243,8 +244,17 @@ class MoodleClient:
         if not path.startswith('/') or '//' in path[:2] or urlsplit(path).scheme or urlsplit(path).netloc:
             raise ValueError('off-origin GET prohibited')
         url=self.base+path
-        response=self.session.get(url,params=params,headers=headers,timeout=self.timeout,
-                                  allow_redirects=False,stream=stream)
+        for attempt in range(3):
+            try:
+                response=self.session.get(url,params=params,headers=headers,timeout=self.timeout,
+                                          allow_redirects=False,stream=stream)
+                break
+            except (requests.ConnectionError, requests.Timeout):
+                if attempt==2:
+                    raise
+                # Idempotent GET only; bounded delay respects Moodle and avoids
+                # hammering the server when a connection is briefly reset.
+                time.sleep(1 << attempt)
         if response.status_code in (301,302,303,307,308):
             response.close();raise MoodleError('redirect: session expired or restricted resource')
         if response.status_code in (401,403):

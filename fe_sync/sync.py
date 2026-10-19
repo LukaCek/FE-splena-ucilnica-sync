@@ -280,14 +280,41 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
         if len(courses)>max_courses:raise MoodleError('course count exceeds configured limit')
         for course in courses:
             course_id=course['id']
-            modules=client.modules(course_id)
-            module_lists[course_id]=modules
             directory=course_dir(course)
+            try:
+                modules=client.modules(course_id)
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                result.errors+=1
+                summary['courses_unavailable']=summary.get('courses_unavailable',0)+1
+                summary.setdefault('error_type',type(exc).__name__)
+                print(f'Course temporarily unavailable: id={course_id} type={type(exc).__name__}',flush=True)
+                # Retain this subject in local navigation if a prior known-good
+                # manifest exists. Never claim its data was checked in this run.
+                manifest=root/directory/'predmet.json'
+                if manifest.is_file() and not manifest.is_symlink():
+                    try:
+                        previous=json.loads(manifest.read_text(encoding='utf-8'))
+                        if (previous.get('id')==course_id and
+                            previous.get('title')==course['title'] and
+                            isinstance(previous.get('modules'),list)):
+                            cached=previous['modules']
+                            module_lists[course_id]=cached
+                            old_folders=sum(m.get('type')=='folder' for m in cached)
+                            old_resources=sum(m.get('type')=='resource' for m in cached)
+                            summary['subjects'].append({'id':course_id,'title':course['title'],
+                                'folders':old_folders,'resources':old_resources,
+                                'other_modules':len(cached)-old_folders-old_resources,
+                                'cached':True})
+                            summary['courses_from_cache']=summary.get('courses_from_cache',0)+1
+                    except (ValueError,OSError,TypeError,AttributeError):
+                        pass
+                continue
+            module_lists[course_id]=modules
             folders=[m for m in modules if m['type']=='folder']
             resources=[m for m in modules if m['type']=='resource']
             course_info={'id':course_id,'title':course['title'],'shortname':course['shortname'],
                 'modules':modules,'synced_at':utcnow(),
-                'limitations':'beta1.4 syncs folder and single-file resource activities; forums, quizzes, tasks and deadlines are not mirrored.'}
+                'limitations':'beta1.4.1 syncs folder and single-file resource activities; forums, quizzes, tasks and deadlines are not mirrored.'}
             atomic_json(root,directory/'predmet.json',course_info)
             summary['subjects'].append({'id':course_id,'title':course['title'],'folders':len(folders),
                                         'resources':len(resources),
@@ -304,7 +331,14 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
                     print(f'Portable folder migration blocked: course={course_id} module={folder["id"]}: {str(exc)[:160]}',flush=True)
                     continue
                 if delay:time.sleep(delay)
-                files=client.folder_files(folder['id'])
+                try:
+                    files=client.folder_files(folder['id'])
+                except (requests.ConnectionError, requests.Timeout) as exc:
+                    result.errors+=1
+                    summary['folders_unavailable']=summary.get('folders_unavailable',0)+1
+                    summary.setdefault('error_type',type(exc).__name__)
+                    print(f'Folder temporarily unavailable: course={course_id} module={folder["id"]} type={type(exc).__name__}',flush=True)
+                    continue
                 for remote in files:
                     if processed>=max_files:raise MoodleError('configured per-run file limit exceeded')
                     processed+=1
@@ -339,7 +373,10 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
         # Module information is only copied from explicitly read e.FE pages.
         try:
             from .pages import build_site
-            summary['navigation']=build_site(root,courses,module_lists,state.list_files(),utcnow())
+            # Never pass courses without manifests: on a first-ever transient
+            # failure a subject may have no cached data yet.
+            display_courses=[c for c in courses if c['id'] in module_lists]
+            summary['navigation']=build_site(root,display_courses,module_lists,state.list_files(),utcnow())
         except (OSError,ValueError,KeyError) as e:
             result.errors+=1
             summary['navigation']={'error_type':type(e).__name__,'reason':str(e)[:200]}
