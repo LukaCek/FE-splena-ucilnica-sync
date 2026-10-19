@@ -89,8 +89,11 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
         forum_warnings = max(0,int(summary.get('announcements_returned_to_course',0)))
     except (ValueError,TypeError):
         forum_warnings = 0
-    forum_notice = (f'Neprebrani forumi (preusmerjeni na predmet): {forum_warnings}\\n'
+    forum_notice = (f'Neprebrani forumi (preusmerjeni na predmet): {forum_warnings}\n'
                     if forum_warnings else '')
+    forum_html_notice = (f'<p style="color:#926208">Opozorilo: {forum_warnings} forum(ov) '
+                         'preusmerja na pregled predmeta in ni arhiviranih.</p>'
+                         if forum_warnings else '')
     txt = (f'{TEXT_MARKER}\n\nLOKALNA SPLETNA UČILNICA FE\n'
            f'Zadnja uspešna osvežitev: {last_label}\n'
            f'Zadnji poskus: {check_label}\n'
@@ -123,9 +126,7 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
             f'<p>Zadnji poskus: <strong>{h(check_label)}</strong></p>'
             f'<p style="color:{colors[state]}"><strong>Stanje: {h(state_name)}</strong></p>'
             f'<p>Napake datotek: {errors}</p>'
-            +(f'<p style="color:#926208">Opozorilo: {forum_warnings} forum(ov) '
-              'preusmerja na pregled predmeta in ni arhiviranih.</p>'
-              if forum_warnings else '')
+            f'{forum_html_notice}'
             f'{f"<p>Vrsta napake: {h(reason)}</p>" if reason else ""}'
             '<hr><h2>Ko prijava poteče</h2>'
             '<p>Na prenosniku zaženi <code>bash ~/Downloads/obnovi-sejo.sh</code>. '
