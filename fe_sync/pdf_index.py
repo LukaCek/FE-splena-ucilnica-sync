@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
+import multiprocessing
 import re
 import sqlite3
 import time
@@ -26,9 +27,11 @@ MAX_CHARS=1_500_000
 MAX_COMPRESSED=350_000
 MAX_FILES_PER_CYCLE=400
 MAX_SECONDS_PER_CYCLE=210
+MAX_SECONDS_PER_PDF=25
+MAX_WORKER_VMEM=384*1024*1024
 INDEX_VERSION=1
 # Do not log PDF text, professor names, URL tokens, file paths or private notes.
-PARTIAL_RESULTS=frozenset({'partial','no_text','unsupported','bad_pdf','ready'})
+PARTIAL_RESULTS=frozenset({'partial','no_text','unsupported','bad_pdf','timeout','ready'})
 
 
 def normalize_words(text:str)->list[str]:
@@ -116,17 +119,62 @@ def _extract(path:Path)->tuple[str,str,int,int]:
             partial=True
         status='partial' if partial else 'ready' if words else 'no_text'
         return status,packed,visited,count
-    except (PdfReadError,ValueError,KeyError,IndexError,TypeError,OSError,
-            OverflowError,ZeroDivisionError):
+    except Exception:
+        # Untrusted PDF parsing must not abort the core Moodle sync.
         return 'bad_pdf','',0,0
+
+
+def _extract_worker(path:str,channel):
+    """Untrusted PDF parsing happens in an isolated, memory-limited child."""
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_AS,(MAX_WORKER_VMEM,MAX_WORKER_VMEM))
+        channel.send(_extract(Path(path)))
+    except Exception:
+        try:channel.send(('bad_pdf','',0,0))
+        except (BrokenPipeError,OSError):pass
+    finally:
+        channel.close()
+
+
+def _safe_extract(path:Path,timeout:int=MAX_SECONDS_PER_PDF):
+    """Kill PDFs that hang or exhaust memory, without killing Docker itself."""
+    ctx=multiprocessing.get_context('fork')  # TrueNAS SCALE is Linux.
+    recv,send=ctx.Pipe(duplex=False)
+    proc=ctx.Process(target=_extract_worker,args=(str(path),send),daemon=True)
+    try:
+        proc.start()
+        send.close()
+        if recv.poll(timeout):
+            try:
+                outcome=recv.recv()
+                if (isinstance(outcome,tuple) and len(outcome)==4
+                    and outcome[0] in ('ready','partial','no_text','unsupported','bad_pdf')):
+                    return outcome
+            except (EOFError,OSError):
+                pass
+            return 'bad_pdf','',0,0
+        return 'timeout','',0,0
+    except (OSError,RuntimeError):
+        return 'bad_pdf','',0,0
+    finally:
+        if proc.pid is not None:
+            if proc.is_alive():proc.terminate()
+            proc.join(timeout=1)
+            if proc.is_alive():
+                proc.kill()
+                proc.join(timeout=1)
+        recv.close()
+        send.close()
 
 
 def _decode(row):
     try:
         blob=row['compressed_terms']
         if not blob or len(blob)>MAX_COMPRESSED:return ''
-        expanded=zlib.decompressobj().decompress(blob,MAX_COMPRESSED*3+1)
-        if len(expanded)>MAX_COMPRESSED*3:return ''
+        inflater=zlib.decompressobj()
+        expanded=inflater.decompress(blob,MAX_COMPRESSED*3+1)
+        if len(expanded)>MAX_COMPRESSED*3 or not inflater.eof:return ''
         return expanded.decode('utf-8')
     except (ValueError,TypeError,zlib.error,UnicodeError):
         return ''
@@ -163,7 +211,7 @@ def index_pdfs(root:Path,state,records:list[dict],courses:list[dict],
     deadline=time.monotonic()+max(1.0,float(time_budget))
     terms={}
     counters={'total':0,'ready':0,'partial':0,'no_text':0,'unsupported':0,
-              'bad_pdf':0,'modified':0,'pending':0,'processed':0,'cached':0}
+              'bad_pdf':0,'timeout':0,'modified':0,'pending':0,'processed':0,'cached':0}
     for record in records:
         info=_valid_pdf(root,record,prefixes)
         if not info:continue
@@ -187,7 +235,7 @@ def index_pdfs(root:Path,state,records:list[dict],courses:list[dict],
                 if _sha_file(path)!=record['sha256']:
                     counters['modified']+=1
                     continue
-                status,vocab,scanned,total=_extract(path)
+                status,vocab,scanned,total=_safe_extract(path)
             except OSError:
                 counters['modified']+=1
                 continue
