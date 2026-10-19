@@ -312,4 +312,9 @@ def build_site(root:Path,courses:list[dict],module_lists:dict[int,list[dict]],re
             raise ValueError(f'course {course["id"]} navigation: {str(exc)[:160]}') from exc
         totals[course['id']]=total
     write_generated(root,Path('Spletna-ucilnica/index.html'),render_home(root,courses,totals,updated))
+    # Keep relative links valid even during first render and standalone builds.
+    if not (root/'Spletna-ucilnica/STANJE.html').is_file():
+        from .status import publish_status
+        publish_status(root,root/'Spletna-ucilnica',
+            {'status':'unknown','finished_at':updated,'files':{}})
     return {'pages':len(courses)+1,'local_files_linked':sum(totals.values()),'home':'Spletna-ucilnica/index.html'}
