@@ -59,7 +59,13 @@ class Links(HTMLParser):
 
 
 def clean_section_title(value: str) -> str:
-    """Strip Moodle control labels from course section headings."""
+    """Remove Moodle section controls captured inside accessible headings.
+
+    Actual e.FE labels include strings such as:
+      'Izberi poglavje Predavanja in vaje Skrči Razširi Predavanja in vaje'
+    We use the text before the controls, or the text after them if there is
+    no 'Izberi poglavje' prefix. No guessing of missing section titles.
+    """
     label=re.sub(r'\s+', ' ', value or '').strip()
     prefix='Izberi poglavje '
     if label.startswith(prefix):
@@ -67,6 +73,7 @@ def clean_section_title(value: str) -> str:
         label=label.split(' Skrči Razširi ',1)[0]
     elif label.startswith('Skrči Razširi '):
         label=label[len('Skrči Razširi '):]
+    # It is safer to drop a malformed heading than to display Moodle controls.
     if not label or label in ('Skrči','Razširi','Skrči vse','Razširi vse'):
         return ''
     return label[:180].strip()
@@ -207,7 +214,7 @@ class MoodleClient:
         self.host=p.hostname
         self.timeout=timeout
         self.session=requests.Session()
-        self.session.headers.update({'User-Agent':'FE-Moodle-Sync/beta1.1 (personal read-only archive)',
+        self.session.headers.update({'User-Agent':'FE-Moodle-Sync/beta1.4 (personal read-only archive)',
             'Accept':'text/html,application/json,application/octet-stream,*/*'})
         self.read_cookies(session_file)
 

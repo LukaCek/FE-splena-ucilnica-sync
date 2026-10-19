@@ -1,8 +1,8 @@
-# FE Moodle Sync — beta 1.2
+# FE Moodle Sync — beta 1.4
 
 Enosmerno, samodejno arhiviranje **datotek iz Moodle map** [e.FE](https://ucilnica-fe.uni-lj.si) na osebni TrueNAS, kjer jih obstoječi FE Gradiva MCP lahko bere. Ločen servis, brez lokalnega AI ali Chromiuma v Dockerju.
 
-**Stanje:** beta 1.2. Beta 1.0 je 19. 10. 2026 uspešno prenesla 222 datotek iz 11 predmetov, beta 1.1 pa dodala osnovni HTML. Beta 1.2 spremeni predvsem prikaz in obdelavo razdelkov. Dejanski prikaz po nadgradnji na TrueNAS-u je treba še preveriti.
+**Stanje:** beta 1.4. Predhodna namestitev je uspešno prenesla 222 datotek iz Moodle map pri 11 predmetih. Beta 1.4 dodaja prenos samostojnih Moodle datotek (`resource`); ta nova funkcija je preizkušena z lokalnimi simulacijami, dejanska zasebna e.FE seja pa zahteva preverjanje na TrueNAS-u.
 
 ## Kaj zmore
 
@@ -30,7 +30,7 @@ Po uspešni sinhronizaciji se samodejno ustvarijo pregledne, **povsem lokalne** 
 ## Ne podpira (še)
 
 - Forumi, objave, napovedi, roki, koledar in vsebine Moodle *Strani/Nalog/Kvizov* se **ne prenašajo**. Naslovi dejavnosti so sicer shranjeni v `predmet.json` za naslednjo iteracijo.
-- Moodle `resource` datoteke zunaj modulov *Mapa*, `book`, H5P, zahtevani AJAX prikaz, eksterni URL-ji in gradiva dostopna zgolj prek JavaScripta niso del beta 1.2.
+- Moodle `resource` je od beta1.4 podprt, kadar vodi do datoteke iz `mod_resource/content` na uradni domeni e.FE. Ne podpira `book`, H5P, datotek, skritih v JavaScriptu, zahtevnejših predvajalnikov ali zunanjih URL-jev. Nekatere aktivnosti `resource` lahko ostanejo označene »e.FE«, če jih ni mogoče varno razrešiti.
 - Če se SSO seja izteče ali je vezana na napravo/IP, bo sinhronizacija obstala; potrebna je ponovna ročna prijava in osvežitev datoteke piškotkov. V Dockerju **ni** shranjenega gesla.
 - Študentska prijavna seja nima strežniško omejenih pravic branja; koda pa nima funkcij za oddajo, kviz ali spreminjanje učilnice. Moodle lahko beleži obisk strani.
 
@@ -82,7 +82,7 @@ rm -f ~/moodle-session-cookies.json
 
 ### 3. Nadgradi obstoječo TrueNAS aplikacijo
 
-Če imaš že nameščeno in delujočo beta 1.0, v **Apps → fe-moodle-sync → Edit** spremeni **samo** sliko `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.0` na `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.1`, shrani ter počakaj na naslednjo sinhronizacijo. Ne briši `/state/files.sqlite` ali obstoječih PDF-jev. Pravice/mounti ostajajo enaki.
+Če imaš že nameščeno in delujočo različico, v **Apps → fe-moodle-sync → Edit** spremeni **samo** sliko na `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.4`, shrani ter počakaj na naslednjo sinhronizacijo. Ne briši `/state/files.sqlite` ali obstoječih PDF-jev. Pravice/mounti ostajajo enaki.
 
 Za takojšnjo generacijo HTML strani brez dodatnega čakanja lahko po zagonu vsebnika uporabiš:
 
@@ -96,7 +96,7 @@ Pozor: enkratnega ročnega zagona ne izvajaj vzporedno z že tekočo samodejno s
 
 V **TrueNAS → Apps → Discover Apps → Custom App → Install via YAML** uporabi [deploy/truenas-compose.yaml](deploy/truenas-compose.yaml). Ime npr. `fe-moodle-sync`.
 
-Slika: `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.1`. GHCR paket mora biti javno viden ali mora TrueNAS imeti prijavo v GHCR. **Ne nameščaj**, dokler GitHub Actions ni uspešno objavil slike.
+Slika: `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.4`. GHCR paket mora biti javno viden ali mora TrueNAS imeti prijavo v GHCR. **Ne nameščaj**, dokler GitHub Actions ni uspešno objavil slike.
 
 Privzeta ura sinhronizacije: vsaki 2 uri od zagona. Za prvi preizkus poišči dnevnike:
 
@@ -166,70 +166,106 @@ Shrani spremembo, počakaj na prvi ciklus oziroma ga sproži z
 
 HTML se posodobi po uspešni sinhronizaciji. Ob iztečeni seji ostane zadnja lokalna kopija; obnoviti je treba sejo, preden se osveži.
 
-## beta1.2.1: popravek HTML in offline ponovna izdelava
 
-Prej je program iskal lastno oznako HTML samo v prvih 1800 znakih,
-oznaka pa je bila za obsežnim CSS. Zato ni mogel posodobiti lastnih strani.
-Sedaj preveri celotno datoteko in še vedno ne prepiše uporabnikovega HTML.
+## Ponovno ustvarjanje lokalnega HTML brez prijave (beta1.2.1)
 
-Brez Moodlove seje lahko HTML takoj obnoviš iz predhodno shranjenih
-predmet.json in SQLite z ukazom:
+Če se Moodle prijava izteče ali je bilo ustvarjanje HTML neuspešno, lahko
+preveriš in ponovno ustvariš HTML samo iz že shranjenih `predmet.json` in
+`/state/files.sqlite`. Povezava z e.FE pri tem ni potrebna:
 
-    sudo docker exec ix-fe-moodle-sync-fe-moodle-sync-1 python -m fe_sync render
+```sh
+sudo docker exec ix-fe-moodle-sync-fe-moodle-sync-1 python -m fe_sync render
+```
 
-Naslovi razdelkov ne vsebujejo več Moodlovih gumbov Izberi poglavje/Skrči/Razširi.
+Novi `render` način ne prenese ali spremeni datotek gradiv. Posodobi le HTML
+strani z znanim generiranim označevalcem. Če naleti na uporabniški `index.html`
+brez označevalca, ga ne prepiše in izpiše razlog, vključno z ID-jem predmeta.
+
+V beta1.2.1 so popravljeni tudi naslovi Moodle razdelkov brez besedila
+»Izberi poglavje / Skrči / Razširi«.
+
+**Odpravljena napaka v beta1.1/1.2:** Označevalec našega HTML-ja je za
+velikim vgrajenim CSS, zato preverjanje prvih 1.800 znakov ni delovalo ob
+vsaki naslednji sinhronizaciji. Beta1.2.1 preveri celotno obstoječo datoteko
+pred varno atomsko zamenjavo; tujih HTML datotek še vedno ne prepisuje.
+
+## beta1.3: zadnja osvežitev in enostavno ročno podaljšanje UL SSO
+
+Po vsakem ciklu (tudi neuspešnem) se posodobita datoteki:
+
+- `FE/Spletna-ucilnica/STANJE.html` — odpri v lokalni e.FE, prikazuje
+  **zadnjo uspešno sinhronizacijo**, zadnji poskus in status napak.
+- `FE/Spletna-ucilnica/STANJE.txt` — enostaven povzetek za upravljalnik datotek.
+
+Na glavni strani in na straneh predmetov je povezava »Zadnja osvežitev«.
+Če se seja izteče, je zadnja uspešna osvežitev ohranjena; ne prikazujemo
+neuspešnega poskusa kot uspeh. Piškotki in gesla nikoli niso v FE.
+
+### Obnovitev UL SSO z enim ukazom (Arch Linux prenosnik)
+
+Na prenosniku mora biti še vedno `~/Downloads/fe_moodle_probe.py` v1.0.6
+in obstoječa `~/Downloads/.venv` z nameščenim Playwrightom. Enkrat shrani
+`scripts/obnovi-sejo.sh` v `~/Downloads/obnovi-sejo.sh` ter zaženi:
+
+```bash
+bash ~/Downloads/obnovi-sejo.sh
+```
+
+Skripta odpre Chromium. Prek UL SSO se prijavi **ročno** in pritisni ENTER.
+Nato skripta preveri bralni Moodle API, prek `scp -p` varno prenese piškotke
+na TrueNAS, skozi `ssh` in `sudo` **prepiše vsebino obstoječe datoteke**
+`/mnt/tank/apps/fe-moodle-sync/secrets/moodle-session-cookies.json`,
+spet zaščiti pravice 0600, odstrani vmesno kopijo in znova zažene
+obstoječi Docker vsebnik. Po ponovnem zagonu preveri 11 predmetov, če je
+seja uspešna. Skripta ne shrani gesla, ničesar ne oddaja na Moodle in ne
+izvozi sejnih piškotkov v Syncthing.
+
+Omejitev: SSO zaradi varnosti še vedno zahteva tvoje ročno potrjevanje;
+prijave ni mogoče podaljševati samodejno brez dodatnega (nepriporočljivega)
+shranjevanja prijavnih skrivnosti. Na računalniku potrebuješ delujoč SSH
+povezavo do `admin@192.168.1.120` in TrueNAS sudo pravice. Če imaš drugo
+lokacijo, nastavi `FE_PROBE_PATH`, `FE_PYTHON`, `FE_NAS_HOST` ali
+`FE_NAS_USER` pred zagonom.
+
+Po nadgradnji Docker slike na `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.3`
+počakaj na prvi cikel ali ročno poženi `python -m fe_sync render`, ki
+osveži prikaz stanja iz shranjenega zadnjega `status.json` brez Moodle zahtev.
 
 
-## beta1.2.2: odprava neusklajenih datotek na Androidu
+## beta1.4 — samostojne datoteke e.FE
 
-Androidova skupna shramba ne sprejema nekaterih znakov v imenih map,
-med drugim \`?\`. Starejše izdaje so za Moodle mapo
-\`Kaj rešujemo na vajah? (skupini 2 in 6)__144739\` ustvarile ime,
-ki ga Syncthing na tablici ne more ustvariti.
+Novi **bralni** način prenese vsebino samostojnih Moodle dejavnosti `Datoteka`
+(`resource`). Pri dostopu `GET /mod/resource/view.php?id=...` sledi
+**le preverjenim** povezavam `/pluginfile.php/.../mod_resource/content/...`
+znotraj `https://ucilnica-fe.uni-lj.si`. Razume varno neposredno preusmeritev
+ali povezavo do vgrajene datoteke v HTML. Nikoli ne sledi zunanji domeni ali
+prenaša poljubne povezave iz vsebine. Prijava ostane lokalna na TrueNAS-u.
 
-- Moodle mape imajo zdaj prenosljiva imena brez \`?"*/:<>\\|\`;
-  unikatni Moodle ID na koncu imena ostaja enak.
-- Pri naslednjem avtomatskem ciklu \`loop\` se obstoječe mape,
-  ki jih upravlja program, varno preimenujejo in v SQLite popravijo
-  relativne poti, zato HTML ohrani lokalne povezave.
-- Pred selitvijo program preveri, da so **vse** datoteke evidentirane in
-  SHA-256 nespremenjene. Če so ročno urejene, dodane ali manjkajo,
-  selitev preskoči z napako in jih ne spreminja.
-- Za prvo nadgradnjo uporabi oznako slike \`beta1.2.2\`
-  in pusti FE Syncthing mape, \`/state\` ter sejno datoteko nespremenjene.
-- Po prvem uspešnem ciklu preveri \`portable_paths_migrated\` v
-  \`/state/status.json\` (pričakovanih osem v problematični Moodle mapi).
-  Syncthing naj nato ponovno pregleda FE mapo na NAS-u in tablici.
+Nastane npr.:
 
-Opomba: \`python -m fe_sync render\` sam ne izvaja selitve in ne
-nadomešča Moodle sinhronizacije; migracija se zgodi med ciklom \`loop\`.
+```text
+FE/1-semester/03_PROG/Spletna-ucilnica/
+  Gradiva/Samostojne-datoteke/
+    E-učbenik__144657/E-učbenik.pdf
+  index.html
+```
 
+Vsaka datotečna dejavnost ima lastno mapo z Moodle ID-jem. Imena so varna za
+Syncthing/Android. HTML namesto povezave »e.FE« prikaže lokalni PDF,
+če je uspešno prenesen. Obstoječi PDF-ji se ne prepišejo, če so bili
+ročno spremenjeni, posnetki in neinteraktivni podatki se ne brišejo.
 
-## beta1.3 — status in obnova Moodle prijave
+Za prvi preizkus:
+1. Posodobi **samo** sliko na
+   `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.4` (ne `latest`).
+2. Po končanem ciklu preberi `/mnt/tank/apps/fe-moodle-sync/state/status.json`.
+   `resources_found` pomeni število zaznanih, `resources_processed`
+   uspešno obdelane datoteke, `resources_unsupported` vsebine brez
+   potrjene datotečne povezave, `resources_errors` napake.
+3. Preveri novi HTML in Syncthing na tablici.
 
-Po vsakem poskusu sinhronizacije, tudi neuspešnem, nastaneta pod
-FE/Spletna-ucilnica datoteki STANJE.html in STANJE.txt.
-Prikazujeta zadnjo res uspešno osvežitev (UTC), zadnji poskus in napake.
-Na glavni strani predmetov in v posameznem predmetu je povezava
-»Zadnja osvežitev«. Ni prijavnih piškotkov, gesel ali sesskey.
-
-### UL SSO podaljšaj z enim ukazom
-
-Enkrat shrani scripts/obnovi-sejo.sh iz repozitorija
-v ~/Downloads/obnovi-sejo.sh. Na Arch Linux prenosniku ohrani
-~/Downloads/fe_moodle_probe.py (v1.0.6), ~/Downloads/.venv
-z nameščenim Playwrightom in SSH dostop do admin@192.168.1.120.
-Ko seja poteče, izvedi: bash ~/Downloads/obnovi-sejo.sh
-
-Skripta odpre Chromium za ročno UL SSO prijavo, nato preveri dostop,
-prenese samo e.FE piškotke s SCP (0600), posodobi obstoječo sejsko
-datoteko v TrueNAS brez menjave bind-mount inode, jo zaščiti s chmod 600,
-odstrani vmesno kopijo in ponovno zažene Docker. Gesla ne shranjuje.
-
-### Nadgradnja
-
-V TrueNAS Custom App zamenjaj samo oznako slike na
-ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.3.
-Po prvem ciklu se STANJE.html in STANJE.txt posodobita samodejno.
-Za izris na podlagi že shranjenega status.json, brez novih Moodle klicev,
-lahko ročno izvedeš: sudo docker exec ix-fe-moodle-sync-fe-moodle-sync-1 python -m fe_sync render
+**Pomembno:** `render` samo ponovno ustvari HTML in **ne prenaša** novih
+datotek. Za `resource` prvič počakaj na sinhronizacijski cikel.
+Možnost `once` ni primerna za vzporedni zagon s samodejnim ciklom.
+Gradnja v CI ne potrjuje dostopa do zasebnih gradiv e.FE; namen tega koraka
+je preverjanje na resnični namestitvi brez tveganja za spremembe v e.FE.

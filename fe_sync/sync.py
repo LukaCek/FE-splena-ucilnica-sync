@@ -14,6 +14,7 @@ import requests
 import time
 
 from .client import MoodleClient, MoodleError, RemoteFile, safe_part
+from .resources import discover_resource_file, resource_local_path, RESOURCE_FILE_RE
 
 # Existing first-semester FE organization. Everything else goes to the general
 # Spletna-ucilnica directory, which is separately writable in Docker Compose.
@@ -54,6 +55,14 @@ def folder_dir(module:dict) -> Path:
     title=re.sub(r'[<>:"/\\|?*]', '', title).strip() or 'Mapa'
     title=safe_part(title,90)
     return Path('Gradiva')/f'{title}__{module["id"]}'
+
+
+def resource_dir(module:dict) -> Path:
+    """Android-compatible destination for a single Moodle resource."""
+    title=re.sub(r'\s+Datoteka$', '', module['title']).strip() or 'Datoteka'
+    title=re.sub(r'[<>:"/\\|?*]', '', title).strip() or 'Datoteka'
+    title=safe_part(title,90)
+    return Path('Gradiva')/'Samostojne-datoteke'/f'{title}__{module["id"]}'
 
 
 def ensure_safe_parent(root:Path,relative:Path) -> Path:
@@ -181,9 +190,11 @@ class Result:
 def store_file(client:MoodleClient,state:State,root:Path,course:dict,module:dict,
                remote:RemoteFile,result:Result,max_bytes:int=MAX_CONTENT_BYTES):
     key=f'{course["id"]}/{module["id"]}/'+ '/'.join(remote.path)
-    base_path=course_dir(course)/folder_dir(module)
-    rel=base_path.joinpath(*remote.path)
-    # Check every remote component before any local file creation.
+    is_resource=module['type']=='resource'
+    base_path=course_dir(course)/(resource_dir(module) if is_resource else folder_dir(module))
+    # Portable filename, preserving the validated remote URL.
+    local_parts=resource_local_path(remote.path) if is_resource else remote.path
+    rel=base_path.joinpath(*local_parts)
     for name in remote.path: safe_part(name,180)
     dest=ensure_safe_parent(root,rel)
     stored=state.lookup(key)
@@ -200,7 +211,10 @@ def store_file(client:MoodleClient,state:State,root:Path,course:dict,module:dict
         if stored['etag']:headers['If-None-Match']=stored['etag']
         if stored['last_modified']:headers['If-Modified-Since']=stored['last_modified']
     # The remote path is produced ONLY by the allowlisted Moodle folder parser.
-    if not re.fullmatch(r'/pluginfile\.php/\d+/mod_folder/content/\d+/.+',remote.url_path):
+    if is_resource:
+        if not RESOURCE_FILE_RE.fullmatch(remote.url_path.split('?',1)[0]):
+            raise ValueError('invalid resource file path')
+    elif not re.fullmatch(r'/pluginfile\.php/\d+/mod_folder/content/\d+/.+',remote.url_path):
         raise ValueError('invalid remote file path')
     response=client.get(remote.url_path,headers=headers,stream=True)
     try:
@@ -270,12 +284,14 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
             module_lists[course_id]=modules
             directory=course_dir(course)
             folders=[m for m in modules if m['type']=='folder']
+            resources=[m for m in modules if m['type']=='resource']
             course_info={'id':course_id,'title':course['title'],'shortname':course['shortname'],
                 'modules':modules,'synced_at':utcnow(),
-                'limitations':'beta1.0 syncs folder files only; forums, quizzes, tasks and deadlines are not mirrored.'}
+                'limitations':'beta1.4 syncs folder and single-file resource activities; forums, quizzes, tasks and deadlines are not mirrored.'}
             atomic_json(root,directory/'predmet.json',course_info)
             summary['subjects'].append({'id':course_id,'title':course['title'],'folders':len(folders),
-                                        'other_modules':len(modules)-len(folders)})
+                                        'resources':len(resources),
+                                        'other_modules':len(modules)-len(folders)-len(resources)})
             for folder in folders:
                 try:
                     renamed=migrate_legacy_folder(root,state,course,folder)
@@ -299,6 +315,26 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
                         # Deliberately don't record request URLs or credentials.
                         result.errors+=1
                         print(f'File sync error: course={course_id} module={folder["id"]} type={type(e).__name__}',flush=True)
+            # One-file Moodle resource activities (download only from approved paths).
+            summary['resources_found']=summary.get('resources_found',0)+len(resources)
+            for resource in resources:
+                if processed>=max_files:raise MoodleError('configured per-run file limit exceeded')
+                processed+=1
+                if delay:time.sleep(delay)
+                try:
+                    remote=discover_resource_file(client,resource['id'])
+                    if remote is None:
+                        summary['resources_unsupported']=summary.get('resources_unsupported',0)+1
+                        continue
+                    outcome=store_file(client,state,root,course,resource,remote,result)
+                    if outcome in ('ok','not_modified'):
+                        summary['resources_processed']=summary.get('resources_processed',0)+1
+                    else:
+                        summary['resources_skipped']=summary.get('resources_skipped',0)+1
+                except (MoodleError,ValueError,OSError,sqlite3.Error,requests.RequestException) as exc:
+                    result.errors+=1
+                    summary['resources_errors']=summary.get('resources_errors',0)+1
+                    print(f'Resource sync error: course={course_id} module={resource["id"]} type={type(exc).__name__}',flush=True)
         # Generate a self-contained, offline HTML navigation after mirroring files.
         # Module information is only copied from explicitly read e.FE pages.
         try:
@@ -317,7 +353,8 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
         summary['finished_at']=utcnow()
         summary['files']=vars(result)
         state.close()
-        # Linked status pages exist even if run_sync is invoked directly.
+        # Status must exist whenever the generated index links to it, even
+        # when run_sync is called directly rather than through the CLI.
         try:
             from .status import publish_status
             publish_status(root,state_path.parent,summary)
@@ -329,9 +366,14 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
 
 
 def render_cached(root: Path, state_dir: Path) -> dict:
-    """Rebuild owned offline HTML from cached manifests; no Moodle calls."""
+    """Regenerate only offline HTML using cached Moodle subject metadata.
+
+    No network, authentication, file downloads or edits to professor materials.
+    Managed HTML is atomically replaced only if it has our marker.
+    """
     from .pages import build_site
-    status=json.loads((state_dir/'status.json').read_text(encoding='utf-8'))
+    status_path=state_dir/'status.json'
+    status=json.loads(status_path.read_text(encoding='utf-8'))
     entries=status.get('subjects',[])
     if not isinstance(entries,list) or not entries:
         raise ValueError('no cached subjects found in status.json')
@@ -352,6 +394,7 @@ def render_cached(root: Path, state_dir: Path) -> dict:
         course['shortname']=info.get('shortname','')
         courses.append(course)
         module_lists[ident]=info['modules']
+    # Existing DB is opened only for reading metadata. Never rebuild the index.
     db_path=state_dir/'files.sqlite'
     con=sqlite3.connect(f'file:{db_path}?mode=ro',uri=True)
     con.row_factory=sqlite3.Row

@@ -172,11 +172,22 @@ def display_title(module:dict) -> str:
 
 
 def html_module(module:dict,root:Path,course:dict,records:list[dict],index_dir:Path) -> tuple[str,int]:
-    from .sync import course_dir,folder_dir
+    from .sync import course_dir,folder_dir,resource_dir
     kind=str(module['type']);title=display_title(module);ident=module['id']
     online=module_url(module)
     icon_key=kind if kind in ICONS else 'file'
     icon=f'<span class="activity-symbol {e(icon_key)}">{ICONS[icon_key]}</span>'
+    if kind=='resource':
+        base=course_dir(course)/resource_dir(module)
+        files=valid_stored_files(root,records,base)
+        if len(files)==1:
+            local_file=files[0]
+            href=local_href(index_dir,local_file)
+            return (f'<div class="activity" id="mod-{e(ident)}" data-activity data-availability="local" '
+                    f'data-search="{e(title)} {e(local_file.name)}"><div class="activity-row">{icon}'
+                    f'<div class="activity-text"><a class="activity-title" href="{e(href)}">{e(title)}</a>'
+                    f'<div class="activity-sub">{e(local_file.name)}</div></div>'
+                    '<span class="status local">lokalno</span></div></div>',1)
     if kind!='folder':
         external=(f'<a class="activity-title" href="{e(online)}" target="_blank" rel="noopener noreferrer">{e(title)}</a>'
                   if online else f'<span class="activity-title">{e(title)}</span>')
@@ -284,12 +295,15 @@ def write_generated(root:Path,relative:Path,body:str)->None:
     if dest.exists():
         if not dest.is_file():
             raise ValueError(f'Refusing to replace user-owned HTML: {relative}')
-        # Marker follows large inline CSS; first-1800-chars check wrongly
-        # rejected previously generated pages on the next synchronization.
-        existing=dest.read_text('utf-8',errors='replace')
+        # The generated marker is in the BODY, after a large inline CSS block.
+        # Checking only the first 1800 characters incorrectly rejects beta1.1
+        # and beta1.2 pages on the second sync. Read once, verify ownership,
+        # and retain the existing protection against overwriting user HTML.
+        existing = dest.read_text('utf-8',errors='replace')
         if MARKER not in existing:
             raise ValueError(f'Refusing to replace user-owned HTML: {relative}')
-        if existing==body:return
+        if existing == body:
+            return
     fd,tmp=tempfile.mkstemp(prefix='.fe-page-',dir=dest.parent)
     try:
         with os.fdopen(fd,'w',encoding='utf-8') as out:
@@ -312,9 +326,4 @@ def build_site(root:Path,courses:list[dict],module_lists:dict[int,list[dict]],re
             raise ValueError(f'course {course["id"]} navigation: {str(exc)[:160]}') from exc
         totals[course['id']]=total
     write_generated(root,Path('Spletna-ucilnica/index.html'),render_home(root,courses,totals,updated))
-    # Keep relative links valid even during first render and standalone builds.
-    if not (root/'Spletna-ucilnica/STANJE.html').is_file():
-        from .status import publish_status
-        publish_status(root,root/'Spletna-ucilnica',
-            {'status':'unknown','finished_at':updated,'files':{}})
     return {'pages':len(courses)+1,'local_files_linked':sum(totals.values()),'home':'Spletna-ucilnica/index.html'}
