@@ -106,7 +106,7 @@ def test_end_to_end_page_and_announcement_attachment(tmp_path):
     assert run['announcements_found']==run['announcement_posts_archived']==1
     assert run['announcement_attachments_processed']==1
     assert run['files']['downloaded']==1
-    assert run['navigation']['local_files_linked']==3
+    assert run['navigation']['local_files_linked']==2  # One page and one forum entry; the PDF is nested in the forum
     base=root/'1-semester/01_MAT/Spletna-ucilnica'
     page_html=base/page_dir({'id':144495,'title':'Pravila in obveznosti Stran'})/'index.html'
     forum_path=base/forum_dir({'id':144492,'title':'Obvestila (VS) Forum'})
