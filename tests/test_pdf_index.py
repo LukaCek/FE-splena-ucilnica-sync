@@ -258,3 +258,19 @@ def test_extraction_timeout_does_not_block_other_files(tmp_path,monkeypatch):
     assert status in ('timeout','bad_pdf')
     assert time.monotonic()-t0<3
     state.close()
+
+
+
+def test_status_page_explains_partial_first_run_pdf_index(tmp_path):
+    from fe_sync.status import publish_status
+    root=tmp_path/'FE';root.mkdir()
+    state=tmp_path/'state';state.mkdir()
+    summary={'status':'ok','finished_at':'2026-10-19T18:50:00+00:00',
+             'files':{'errors':0},'pdf_index':{
+                 'total':354,'searchable':120,'pending':200,'no_text':30,'partial':4}}
+    publish_status(root,state,summary)
+    txt=(root/'Spletna-ucilnica/STANJE.txt').read_text()
+    html=(root/'Spletna-ucilnica/STANJE.html').read_text()
+    assert '120/354' in txt and 'čaka 200' in txt
+    assert 'brez besedila 30' in html
+    assert 'ISKANJE.html' in html
