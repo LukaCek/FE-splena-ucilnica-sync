@@ -128,7 +128,7 @@ function filterItems(){
 
 
 SCRIPT += r'''
-/* No network, fetch(), or external JS. Works with local file:// copies. */
+/* Offline static HTML: no remote APIs or external JavaScript. */
 function normalizeSearch(value){
  return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('sl');
 }

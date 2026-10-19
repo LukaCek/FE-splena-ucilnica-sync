@@ -18,7 +18,7 @@ def setup_indexed_course(root):
     course_base=course_dir(COURSE)
     write_generated(root,course_base/'index.html',page('Matematika I','<main>Moodle</main>','2026-10-19'))
     pdf=course_base/'Gradiva/Predavanja__10/Škraba-kolokvij.pdf'
-    pdf.parent.mkdir(parents=True,exist_ok=True)
+    (root/pdf).parent.mkdir(parents=True,exist_ok=True)
     (root/pdf).write_bytes(b'%PDF-1.7\nexample')
     mod={'id':22,'type':'page','title':'Govorilne ure Stran'}
     note=course_base/page_dir(mod)
