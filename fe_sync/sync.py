@@ -84,6 +84,8 @@ class State:
           synced_at=excluded.synced_at''',
           (key,str(rel_path),sha256,etag,last_modified,size,utcnow()))
         self.c.commit()
+    def list_files(self):
+        return [dict(row) for row in self.c.execute('SELECT remote_key,rel_path,sha256,size_bytes FROM files')]
     def close(self):self.c.close()
 
 
@@ -198,6 +200,7 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
     root=root.resolve(strict=True)
     state=State(state_path)
     result=Result();processed=0
+    module_lists={}
     summary={'started_at':utcnow(),'status':'running','files':{},'subjects':[]}
     try:
         client=client_factory(cookie_file)
@@ -206,6 +209,7 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
         for course in courses:
             course_id=course['id']
             modules=client.modules(course_id)
+            module_lists[course_id]=modules
             directory=course_dir(course)
             folders=[m for m in modules if m['type']=='folder']
             course_info={'id':course_id,'title':course['title'],'shortname':course['shortname'],
@@ -227,6 +231,15 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
                         # Deliberately don't record request URLs or credentials.
                         result.errors+=1
                         print(f'File sync error: course={course_id} module={folder["id"]} type={type(e).__name__}',flush=True)
+        # Generate a self-contained, offline HTML navigation after mirroring files.
+        # Module information is only copied from explicitly read e.FE pages.
+        try:
+            from .pages import build_site
+            summary['navigation']=build_site(root,courses,module_lists,state.list_files(),utcnow())
+        except (OSError,ValueError,KeyError) as e:
+            result.errors+=1
+            summary['navigation']={'error_type':type(e).__name__}
+            print(f'Local navigation error: {type(e).__name__}',flush=True)
         summary['status']='ok' if result.errors==0 else 'partial'
     except Exception as e:
         summary['status']='failed'

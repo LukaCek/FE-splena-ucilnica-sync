@@ -1,10 +1,24 @@
-# FE Moodle Sync — beta 1.0
+# FE Moodle Sync — beta 1.1
 
 Enosmerno, samodejno arhiviranje **datotek iz Moodle map** [e.FE](https://ucilnica-fe.uni-lj.si) na osebni TrueNAS, kjer jih obstoječi FE Gradiva MCP lahko bere. Ločen servis, brez lokalnega AI ali Chromiuma v Dockerju.
 
-**Stanje:** beta 1.0, kodo in teste je treba potrditi tudi proti dejanski prijavljeni seji na TrueNAS-u; dotlej ni potrjen produkcijski prenos.
+**Stanje:** beta 1.1, nadgradnja uspešno uporabljene beta 1.0; 19. 10. 2026 je beta 1.0 na TrueNAS-u prenesla 222 datotek iz 11 predmetov. Offline HTML navigacijo beta 1.1 je treba po posodobitvi še preveriti na dejanskih gradivih.
 
 ## Kaj zmore
+
+### Offline spletna učilnica v HTML
+
+Po uspešni sinhronizaciji se samodejno ustvarijo pregledne, **povsem lokalne** HTML strani, podobne navigaciji spletne učilnice:
+
+- **Glavna stran:** `FE/Spletna-ucilnica/index.html` — vsi odkriti predmeti in iskanje po imenih.
+- **Stran vsakega predmeta:** `FE/1-semester/01_MAT/Spletna-ucilnica/index.html` (za Matematiko I; ostali predmeti v svojih mapah) — dejavnosti v enakem vrstnem redu kot zaznane Moodle povezave, arhivirane mape, podmape, PDF-ji in druge prenesene datoteke.
+- **Lokalne povezave:** klik na datoteko uporablja relativno pot, zato mora delovati tudi po Syncthing prenosu na prenosnik/tablico brez interneta. Odpri HTML iz dejanske sinhronizirane mape v brskalniku oziroma upravljalniku datotek; to ni spletna stran gostovana na TrueNAS-u.
+- **Spletne dejavnosti:** naloge, kvizi, forumi, strani in drugi moduli, katerih vsebina še ni prenesena, so jasno označeni **»Samo na e.FE«**. Imajo le povezavo na izvirni Moodle `view.php`, ki zahteva internet in prijavo; arhiv jih sam ne odpira in ne izvaja.
+- **Iskanje:** iskanje predmetov na glavni strani in imen lokalnih datotek na strani predmeta poteka v brskalniku, brez zunanjih knjižnic ali omrežnih poizvedb.
+- **Varnost:** HTML ne vključuje Moodle piškotkov, `sesskey`, zunanjih skript ali izvirnega HTML-ja s spletne učilnice. Imena modulov/datotek se HTML-escape-ajo, lokalni linki so URL-encoded. Generator ne prepiše obstoječih uporabnikovih datotek `index.html`, ki nimajo njegove oznake.
+
+**Pomembno:** vizualna in navigacijska kopija, ne funkcionalni Moodle. Prikazani so le moduli, ki jih beta 1.1 že zazna iz povezav; ne prenaša vsebine forumov, rokov in drugih interaktivnih dejavnosti. Izvorna FE gradiva ostanejo nedotaknjena.
+
 
 - Obnovi e.FE sejo s 0600 zaščiteno datoteko piškotkov, ki jo uporabnik izvozi z že preizkušenim lokalnim diagnostičnim orodjem v1.0.6.
 - Uporabi samo Moodle dokumentirano **bralno** AJAX funkcijo `core_course_get_enrolled_courses_by_timeline_classification` (POST je samo za ta bralni klic); nato GET za strukturo predmetov, Moodle mape in `pluginfile.php` datoteke.
@@ -16,7 +30,7 @@ Enosmerno, samodejno arhiviranje **datotek iz Moodle map** [e.FE](https://ucilni
 ## Ne podpira (še)
 
 - Forumi, objave, napovedi, roki, koledar in vsebine Moodle *Strani/Nalog/Kvizov* se **ne prenašajo**. Naslovi dejavnosti so sicer shranjeni v `predmet.json` za naslednjo iteracijo.
-- Moodle `resource` datoteke zunaj modulov *Mapa*, `book`, H5P, zahtevani AJAX prikaz, eksterni URL-ji in gradiva dostopna zgolj prek JavaScripta niso del beta 1.0.
+- Moodle `resource` datoteke zunaj modulov *Mapa*, `book`, H5P, zahtevani AJAX prikaz, eksterni URL-ji in gradiva dostopna zgolj prek JavaScripta niso del beta 1.1.
 - Če se SSO seja izteče ali je vezana na napravo/IP, bo sinhronizacija obstala; potrebna je ponovna ročna prijava in osvežitev datoteke piškotkov. V Dockerju **ni** shranjenega gesla.
 - Študentska prijavna seja nima strežniško omejenih pravic branja; koda pa nima funkcij za oddajo, kviz ali spreminjanje učilnice. Moodle lahko beleži obisk strani.
 
@@ -66,11 +80,23 @@ rm -f ~/moodle-session-cookies.json
 
 Če je aplikacija že nameščena in osvežuješ sejo, posodobi vsebino iste datoteke brez menjave bind-mounta oziroma znova zaženi aplikacijo. **Nikoli ne pošiljaj datoteke piškotkov v chat ali Syncthing.** TrueNAS uporabnik, ki lahko bere te piškotke, ima dostop kot tvoj Moodle račun.
 
-### 3. Namesti Docker Compose
+### 3. Nadgradi obstoječo TrueNAS aplikacijo
+
+Če imaš že nameščeno in delujočo beta 1.0, v **Apps → fe-moodle-sync → Edit** spremeni **samo** sliko `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.0` na `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.1`, shrani ter počakaj na naslednjo sinhronizacijo. Ne briši `/state/files.sqlite` ali obstoječih PDF-jev. Pravice/mounti ostajajo enaki.
+
+Za takojšnjo generacijo HTML strani brez dodatnega čakanja lahko po zagonu vsebnika uporabiš:
+
+```sh
+sudo docker exec ix-fe-moodle-sync-fe-moodle-sync-1 python -m fe_sync once
+```
+
+Pozor: enkratnega ročnega zagona ne izvajaj vzporedno z že tekočo samodejno sinhronizacijo. Če želiš preprečiti dvojno izvajanje, raje samo znova zaženi aplikacijo in počakaj, da se konča prvi pregled. Če seja poteče, bo treba obnoviti prijavo kot pri beta 1.0.
+
+### 4. Namesti Docker Compose (novi uporabniki)
 
 V **TrueNAS → Apps → Discover Apps → Custom App → Install via YAML** uporabi [deploy/truenas-compose.yaml](deploy/truenas-compose.yaml). Ime npr. `fe-moodle-sync`.
 
-Slika: `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.0`. GHCR paket mora biti javno viden ali mora TrueNAS imeti prijavo v GHCR. **Ne nameščaj**, dokler GitHub Actions ni uspešno objavil slike.
+Slika: `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.1`. GHCR paket mora biti javno viden ali mora TrueNAS imeti prijavo v GHCR. **Ne nameščaj**, dokler GitHub Actions ni uspešno objavil slike.
 
 Privzeta ura sinhronizacije: vsaki 2 uri od zagona. Za prvi preizkus poišči dnevnike:
 
@@ -82,13 +108,14 @@ sudo cat /mnt/tank/apps/fe-moodle-sync/state/status.json
 
 Preveri `status` (`ok`/`partial`/`failed`) in `files.downloaded`. Če vidiš `failed` in `MoodleError`, je lahko seja potekla ali ni prenosljiva na NAS.
 
-### 4. Kaj nastane v FE mapah
+### 5. Kaj nastane v FE mapah
 
 ```text
 FE/
   1-semester/
     01_MAT/
       Spletna-ucilnica/
+        index.html   # lokalni pogled predmeta
         predmet.json
         Gradiva/
           Predavanja__144497/
@@ -96,8 +123,11 @@ FE/
           Izpiti__144500/
             2026/izp_mat1vs_2026_1.pdf
     04_ELE/Spletna-ucilnica/...
-  Spletna-ucilnica/Ostali-predmeti/
-    4161_Programiranje_II/...
+  Spletna-ucilnica/
+    index.html       # glavna stran s predmeti
+    Ostali-predmeti/
+      4161_Programiranje_II/
+        index.html
 ```
 
 Ker je to ista FE Syncthing mapa, bo FE Gradiva dokumente zaznal ob naslednjem indeksiranju. Če ne želiš kopiranja vseh prilog na tablico, v Syncthing dodaj ustrezne ignore vzorce (ne izbriši datotek na NAS-u).
@@ -110,7 +140,7 @@ python -m pytest -q
 python -m fe_sync once   # zahteva FE_ROOT, SYNC_STATE_DIR in FE_MOODLE_SESSION_FILE
 ```
 
-GitHub Actions preveri teste in Docker build ter ob pushu na `main` objavi GHCR `beta1.0` in `latest`. Za nadaljnje izdaje uporabimo nove oznake, ne tiho spreminjanje produkcijske slike.
+GitHub Actions preveri teste in Docker build ter ob pushu na `main` objavi GHCR `beta1.1` in `latest`. Za nadaljnje izdaje uporabimo nove oznake, ne tiho spreminjanje produkcijske slike.
 
 ## Varnost
 

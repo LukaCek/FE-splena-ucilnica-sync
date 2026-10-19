@@ -1,1 +1,2 @@
-__version__ = "beta1.0"
+"""FE Moodle Sync: one-way Moodle archive and offline HTML navigation."""
+__version__ = "beta1.1"
