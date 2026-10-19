@@ -94,13 +94,23 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
     forum_html_notice = (f'<p style="color:#926208">Opozorilo: {forum_warnings} forum(ov) '
                          'preusmerja na pregled predmeta in ni arhiviranih.</p>'
                          if forum_warnings else '')
+    calendar=summary.get('calendar') or {}
+    changes=summary.get('changes') or {}
+    calendar_available=calendar.get('available') is True
+    calendar_label=('Na voljo' if calendar_available else 'Ni preverjenih podatkov')
+    try:
+        recent_count=max(0,int(changes.get('recent',0)))
+    except (ValueError,TypeError):
+        recent_count=0
     txt = (f'{TEXT_MARKER}\n\nLOKALNA SPLETNA UČILNICA FE\n'
            f'Zadnja uspešna osvežitev: {last_label}\n'
            f'Zadnji poskus: {check_label}\n'
            f'Stanje zadnjega poskusa: {state_name}\n'
            f'Napake datotek: {errors}\n'
            f'Tip napake: {reason or "-"}\n'
-           f'{forum_notice}\n'
+           f'{forum_notice}'
+           f'Koledar e.FE: {calendar_label}\n'
+           f'Novosti zadnjih 30 dni: {recent_count}\n\n'
            'Ko seja poteče, na prenosniku izvedi:\n'
            'bash ~/Downloads/obnovi-sejo.sh\n'
            'Prijava prek UL SSO je ročna. Piškotki ostanejo zunaj mape FE.\n')
@@ -127,6 +137,10 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
             f'<p style="color:{colors[state]}"><strong>Stanje: {h(state_name)}</strong></p>'
             f'<p>Napake datotek: {errors}</p>'
             f'{forum_html_notice}'
+            f'<p>Koledar e.FE: <strong>{h(calendar_label)}</strong></p>'
+            f'<p>Novosti zadnjih 30 dni: <strong>{recent_count}</strong> '
+            '<a href="NOVOSTI.html">Poglej novosti</a> · '
+            '<a href="KOLEDAR.html">Poglej koledar</a></p>'
             f'{f"<p>Vrsta napake: {h(reason)}</p>" if reason else ""}'
             '<hr><h2>Ko prijava poteče</h2>'
             '<p>Na prenosniku zaženi <code>bash ~/Downloads/obnovi-sejo.sh</code>. '
