@@ -6,6 +6,7 @@ read-only by Moodle. Never fetch arbitrary URLs in returned event metadata.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from html import unescape
 import re
 from urllib.parse import urlsplit
@@ -153,6 +154,17 @@ def write_calendar_ics(root,body:str)->None:
         if os.path.exists(temp):os.unlink(temp)
 
 
+SLOVENIA = ZoneInfo('Europe/Ljubljana')
+WEEKDAYS = ('ponedeljek','torek','sreda','četrtek','petek','sobota','nedelja')
+MONTHS = ('januar','februar','marec','april','maj','junij',
+          'julij','avgust','september','oktober','november','december')
+
+
+def local_datetime(epoch:int)->datetime:
+    """DST-aware Slovenian civil time, independent of the NAS time zone."""
+    return datetime.fromtimestamp(epoch,timezone.utc).astimezone(SLOVENIA)
+
+
 def render_calendar(root,events:list[dict]|None,truncated:bool=False)->dict:
     from .pages import page,write_generated,e
     from pathlib import Path
@@ -161,30 +173,66 @@ def render_calendar(root,events:list[dict]|None,truncated:bool=False)->dict:
         main=('<div class="breadcrumb"><a href="index.html">Moji predmeti</a> / Koledar</div>'
               '<main class="course-shell" id="content"><h1>Koledar e.FE</h1>'
               '<p>Koledarski podatki niso na voljo. Oglej si roke neposredno na e.FE.</p>'
+              '<p class="muted-info">Če že obstaja datoteka KOLEDAR.ics iz prejšnje osvežitve, '
+              'je lahko zastarela.</p>'
               '<p><a href="https://ucilnica-fe.uni-lj.si/calendar/view.php">Odpri koledar e.FE ↗</a></p></main>')
     else:
-        entries=[]
-        for item in events:
-            dt=datetime.fromtimestamp(item['when'],timezone.utc).strftime('%d. %m. %Y, %H:%M UTC')
-            category='Rok' if item['kind']=='rok' else 'Dogodek'
-            entries.append(f'<li><strong>{e(dt)}</strong> · {e(category)} · {e(item["course"])} · '
-                           f'<a href="{e(item["source"])}" target="_blank" rel="noopener noreferrer">'
-                           f'{e(item["title"])}</a></li>')
-        alert=('<p class="muted-info">Opozorilo: API je vrnil več dogodkov, kot jih lahko varno '
-               'prikažemo; seznam morda ni popoln.</p>' if truncated else '')
-        note=('<p>Prikazani so samo dogodki vpisanih predmetov, ki jih je bilo mogoče '
-              'preveriti v e.FE. Obdobje: zadnjih 7 in naslednjih 183 dni. '
-              'Ura je prikazana v UTC; datumi niso nujno roki oddaje.</p>'
-              '<p><a href="KOLEDAR.ics">Koledar za uvoz (.ics)</a> · '
-              '<a href="https://ucilnica-fe.uni-lj.si/calendar/view.php">'
-              'Izvirni koledar e.FE ↗</a></p>')
+        groups={}
+        for item in sorted(events,key=lambda row:(row['when'],row['id'])):
+            dt=local_datetime(item['when'])
+            group_key=dt.date().isoformat()
+            groups.setdefault(group_key,[]).append((item,dt))
+        sections=[]
+        for date_key,items in groups.items():
+            dt=items[0][1]
+            header=f'{WEEKDAYS[dt.weekday()].capitalize()}, {dt.day}. {MONTHS[dt.month-1]} {dt.year}'
+            blocks=[]
+            for event,event_dt in items:
+                kind='rok' if event['kind']=='rok' else 'dogodek'
+                category='Rok oddaje' if kind=='rok' else 'Dogodek'
+                clock=event_dt.strftime('%H:%M')
+                tz=event_dt.tzname()  # Europe/Ljubljana => CET/CEST
+                iso=event_dt.isoformat()
+                blocks.append(
+                    f'<div class="calendar-event" data-calendar-event data-calendar-kind="{e(kind)}">'
+                    f'<time class="calendar-time" datetime="{e(iso)}">{e(clock)} {e(tz)}</time>'
+                    '<span class="calendar-event-info">'
+                    f'<span><a href="{e(event["source"])}" target="_blank" rel="noopener noreferrer">'
+                    f'{e(event["title"])}</a>'
+                    f'<span class="calendar-kind {"due" if kind=="rok" else ""}">{e(category)}</span></span>'
+                    f'<small>{e(event["course"])}</small></span></div>')
+            sections.append(f'<section class="calendar-day" data-calendar-day>'
+                            f'<h2>{e(header)}</h2>{"".join(blocks)}</section>')
+        alert=('<p class="muted-info">Opozorilo: Moodle API je vrnil več dogodkov, '
+               'kot jih lahko prikažemo; seznam ni nujno popoln.</p>' if truncated else '')
+        note=('<p>Prikazani so preverjeni dogodki tvojih predmetov za zadnjih 7 in naslednjih '
+              '183 dni. Ure so pretvorjene v <strong>slovenski čas (Europe/Ljubljana)</strong> '
+              'z upoštevanjem premika ure (CET/CEST). Vsi dogodki niso roki oddaje in ta '
+              'seznam ne nadomešča uradne e.FE.</p>'
+              '<p><a href="KOLEDAR.ics">Izvoz koledarja (.ics)</a> · '
+              '<a href="https://ucilnica-fe.uni-lj.si/calendar/view.php" '
+              'target="_blank" rel="noopener noreferrer">Izvirni koledar e.FE ↗</a></p>')
+        controls=('<div class="calendar-controls" role="group" aria-label="Filtriraj koledar">'
+                  '<button type="button" data-cal-filter="all" aria-pressed="true" '
+                  'onclick="filterCalendarEvents(\'all\')">Vse</button>'
+                  '<button type="button" data-cal-filter="rok" aria-pressed="false" '
+                  'onclick="filterCalendarEvents(\'rok\')">Roki oddaje</button>'
+                  '<button type="button" data-cal-filter="dogodek" aria-pressed="false" '
+                  'onclick="filterCalendarEvents(\'dogodek\')">Ostali dogodki</button></div>')
         main=('<div class="breadcrumb"><a href="index.html">Moji predmeti</a> / Koledar</div>'
-              '<main class="course-shell" id="content"><h1>Koledar e.FE</h1>'
-              +note+alert+('<ul>' + ''.join(entries) + '</ul>' if entries else
-                           '<p>Za to obdobje ni preverjenih dogodkov.</p>')+'</main>')
+              '<main class="course-shell" id="content">'
+              '<div class="page-title"><h1>Koledar e.FE</h1></div>'
+              +note+alert+controls+
+              f'<p id="calendarCount" role="status" aria-live="polite">{len(events)} dogodkov</p>'
+              +''.join(sections)+
+              ('<p>Za to obdobje ni preverjenih dogodkov.</p>' if not events else '')
+              +'</main>')
         write_calendar_ics(root,calendar_ics(events,now))
     write_generated(root,Path('Spletna-ucilnica/KOLEDAR.html'),
                     page('Koledar',main,now.strftime('%Y-%m-%d %H:%M'),
-                         home='index.html',status_href='STANJE.html'))
+                         home='index.html',status_href='STANJE.html',
+                         search_href='ISKANJE.html',updates_href='NOVOSTI.html',
+                         calendar_href='KOLEDAR.html'))
     return {'events':len(events) if events is not None else 0,
-            'available':events is not None,'truncated':bool(truncated)}
+            'available':events is not None,'truncated':bool(truncated),
+            'timezone':'Europe/Ljubljana'}
