@@ -453,6 +453,18 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
             result.errors+=1
             summary['changes_error_type']=type(exc).__name__
             print(f'Changes history error: {type(exc).__name__}',flush=True)
+        # Index mirrored PDFs locally, never re-read unchanged PDFs. The work
+        # budget is bounded so malformed/large files cannot stall routine sync.
+        # PDF-index failures do not erase previous search or course navigation.
+        pdf_terms={}
+        try:
+            from .pdf_index import index_pdfs
+            known_courses=[c for c in courses if c['id'] in module_lists]
+            pdf_terms,summary['pdf_index']=index_pdfs(
+                root,state,state.list_files(),known_courses)
+        except (OSError,ValueError,sqlite3.Error,ImportError) as exc:
+            summary['pdf_index']={'available':False,'error_type':type(exc).__name__}
+            print(f'PDF index unavailable: {type(exc).__name__}',flush=True)
         # Generate a self-contained, offline HTML navigation after mirroring files.
         # Module information is only copied from explicitly read e.FE pages.
         try:
@@ -460,7 +472,8 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
             # Never pass courses without manifests: on a first-ever transient
             # failure a subject may have no cached data yet.
             display_courses=[c for c in courses if c['id'] in module_lists]
-            summary['navigation']=build_site(root,display_courses,module_lists,state.list_files(),utcnow())
+            summary['navigation']=build_site(root,display_courses,module_lists,
+                                              state.list_files(),utcnow(),pdf_terms=pdf_terms)
         except (OSError,ValueError,KeyError) as e:
             result.errors+=1
             summary['navigation']={'error_type':type(e).__name__,'reason':str(e)[:200]}
@@ -515,12 +528,16 @@ def render_cached(root: Path, state_dir: Path) -> dict:
         course['shortname']=info.get('shortname','')
         courses.append(course)
         module_lists[ident]=info['modules']
-    # Existing DB is opened only for reading metadata. Never rebuild the index.
+    # Render mode does not access Moodle and never extracts PDFs. Only cached
+    # search vocabulary with matching source stat/SHA metadata is reused.
     db_path=state_dir/'files.sqlite'
     con=sqlite3.connect(f'file:{db_path}?mode=ro',uri=True)
     con.row_factory=sqlite3.Row
     try:
-        records=[dict(r) for r in con.execute('SELECT rel_path FROM files')]
+        records=[dict(r) for r in con.execute(
+            'SELECT remote_key,rel_path,sha256,size_bytes FROM files')]
+        from .pdf_index import cached_terms
+        pdf_terms=cached_terms(root,con,records,courses)
     finally:
         con.close()
-    return build_site(root,courses,module_lists,records,utcnow())
+    return build_site(root,courses,module_lists,records,utcnow(),pdf_terms=pdf_terms)

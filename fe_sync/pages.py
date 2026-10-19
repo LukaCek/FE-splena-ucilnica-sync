@@ -141,7 +141,11 @@ function filterGlobalResults(){
  let count=0;
  document.querySelectorAll('[data-result]').forEach(item=>{
   const search=normalizeSearch(item.dataset.search||'');
-  const match=words.every(word=>search.includes(word)) &&
+  // Index terms live in HTML, not in a remote JS file or network fetch.
+  // All queried words may be anywhere in the same PDF, not a phrase.
+  const pdfWords=item.dataset.pdfTerms?' '+item.dataset.pdfTerms+' ':'';
+  const match=words.every(word=>search.includes(word)||
+    (pdfWords&&pdfWords.includes(' '+word+' '))) &&
    (kind==='all'||item.dataset.kind===kind) &&
    (course==='all'||item.dataset.course===course);
   item.hidden=!match;
@@ -476,7 +480,8 @@ def write_generated(root:Path,relative:Path,body:str)->None:
         if os.path.exists(tmp):os.unlink(tmp)
 
 
-def build_site(root:Path,courses:list[dict],module_lists:dict[int,list[dict]],records:list[dict],updated:str)->dict:
+def build_site(root:Path,courses:list[dict],module_lists:dict[int,list[dict]],
+               records:list[dict],updated:str,pdf_terms:dict[str,str]|None=None)->dict:
     from .sync import course_dir
     main=root/'Spletna-ucilnica/index.html'
     totals={}
@@ -489,6 +494,6 @@ def build_site(root:Path,courses:list[dict],module_lists:dict[int,list[dict]],re
         totals[course['id']]=total
     write_generated(root,Path('Spletna-ucilnica/index.html'),render_home(root,courses,totals,updated))
     from .search import render_search
-    search=render_search(root,courses,module_lists,records,updated)
+    search=render_search(root,courses,module_lists,records,updated,pdf_terms=pdf_terms)
     return {'pages':len(courses)+1,'local_files_linked':sum(totals.values()),
             'home':'Spletna-ucilnica/index.html','search':search}
