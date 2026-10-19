@@ -291,6 +291,8 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
         client=client_factory(cookie_file)
         courses=client.courses()
         if len(courses)>max_courses:raise MoodleError('course count exceeds configured limit')
+        from .updates import capture
+        baseline=capture(root,state,courses)
         for course in courses:
             course_id=course['id']
             directory=course_dir(course)
@@ -330,7 +332,7 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
             announcements=[m for m in modules if is_announcement(m)]
             course_info={'id':course_id,'title':course['title'],'shortname':course['shortname'],
                 'modules':modules,'synced_at':utcnow(),
-                'limitations':'beta1.5 archives supported Moodle pages and announcement posts as escaped plain text; interactive activities and deadlines are not mirrored.'}
+                'limitations':'beta1.6 reads optional official Moodle calendar action events with verified dates and tracks recent changes; interactive submissions are never mirrored.'}
             atomic_json(root,directory/'predmet.json',course_info)
             summary['subjects'].append({'id':course_id,'title':course['title'],'folders':len(folders),
                                         'resources':len(resources),
@@ -427,6 +429,30 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
                     result.errors+=1
                     summary['announcements_errors']=summary.get('announcements_errors',0)+1
                     print(f'Forum archive error: course={course_id} module={item["id"]} type={type(exc).__name__}',flush=True)
+        # Calendar is optional: not all Moodle instances expose the read-only
+        # AJAX API. Never invent deadlines or fail core file sync because of it.
+        from .calendar import fetch_calendar,render_calendar
+        try:
+            events,truncated=fetch_calendar(client,courses)
+            summary['calendar']=render_calendar(root,events,truncated)
+        except (MoodleError,ValueError,OSError,requests.RequestException) as exc:
+            summary['calendar']={'available':False,'error_type':type(exc).__name__}
+            print(f'Calendar unavailable: {type(exc).__name__}',flush=True)
+            try:
+                render_calendar(root,None)
+            except (ValueError,OSError) as render_exc:
+                result.errors+=1
+                print(f'Calendar HTML error: {type(render_exc).__name__}',flush=True)
+        # Preserve changes for 30 days, instead of showing only the last cycle.
+        from .updates import capture as capture_updates,record_changes,history,render_history
+        try:
+            current=capture_updates(root,state,courses,module_lists)
+            summary['changes']=record_changes(state,baseline,current,utcnow())
+            summary['changes']['shown']=render_history(root,history(state))['shown']
+        except (OSError,ValueError,sqlite3.Error) as exc:
+            result.errors+=1
+            summary['changes_error_type']=type(exc).__name__
+            print(f'Changes history error: {type(exc).__name__}',flush=True)
         # Generate a self-contained, offline HTML navigation after mirroring files.
         # Module information is only copied from explicitly read e.FE pages.
         try:
