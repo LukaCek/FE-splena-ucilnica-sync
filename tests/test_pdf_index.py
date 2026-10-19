@@ -181,3 +181,80 @@ def test_cache_decompression_bounded_and_corrupt_rows_fail_closed(tmp_path):
     assert report['cached']==1
     assert path.relative_to(root).as_posix() not in terms or terms[path.relative_to(root).as_posix()]=='' 
     state.close()
+
+
+class PdfResponse:
+    status_code=200
+    headers={'Content-Type':'application/pdf'}
+    def __init__(self,payload):self.payload=payload
+    def iter_content(self,size):yield self.payload
+    def close(self):pass
+
+
+class MoodleFixture:
+    payload=None
+    def __init__(self,cookies):pass
+    def courses(self):return [COURSE]
+    def modules(self,ident):
+        return [{'id':12,'type':'folder','title':'Predavanja Mapa',
+                 'section_title':'Predavanja'}]
+    def folder_files(self,ident):
+        from fe_sync.client import RemoteFile
+        return [RemoteFile(('Coulomb.pdf',),
+                '/pluginfile.php/50/mod_folder/content/0/Coulomb.pdf')]
+    def get(self,*a,**kw):
+        return PdfResponse(self.payload)
+
+
+def test_end_to_end_moodle_pdf_search_and_cache(tmp_path):
+    from fe_sync.sync import run_sync
+    source=tmp_path/'original.pdf'
+    real_pdf(source,'Coulombov zakon opisuje elektricno silo')
+    MoodleFixture.payload=source.read_bytes()
+    root=tmp_path/'FE';root.mkdir()
+    state=tmp_path/'state/files.sqlite'
+    first=run_sync(root,state,tmp_path/'secret',client_factory=MoodleFixture,delay=0)
+    assert first['status']=='ok',first
+    assert first['files']['downloaded']==1
+    assert first['pdf_index']['ready']==1
+    assert first['navigation']['search']['pdf_word_entries']==1
+    html=(root/'Spletna-ucilnica/ISKANJE.html').read_text()
+    assert 'coulombov' in html and 'elektricno' in html
+    again=run_sync(root,state,tmp_path/'secret',client_factory=MoodleFixture,delay=0)
+    assert again['status']=='ok'
+    assert again['files']['unchanged']==1
+    assert again['pdf_index']['cached']==1
+    assert again['pdf_index']['processed']==0
+
+
+def test_malformed_pdf_does_not_fail_core_sync(tmp_path):
+    root=tmp_path/'FE';root.mkdir()
+    state=State(tmp_path/'state/files.sqlite')
+    course=course_dir(COURSE)
+    rel=course/'Gradiva/Predavanja__12/broken.pdf'
+    file=root/rel
+    file.parent.mkdir(parents=True,exist_ok=True)
+    file.write_bytes(b'%PDF-1.5\\nnot a real document')
+    state.save('4149/12/broken.pdf',rel,hashlib.sha256(file.read_bytes()).hexdigest(),
+               None,None,file.stat().st_size)
+    terms,report=index_pdfs(root,state,state.list_files(),[COURSE])
+    assert report['bad_pdf']==1 and report['pending']==0
+    assert not terms
+    state.close()
+
+
+def test_extraction_timeout_does_not_block_other_files(tmp_path,monkeypatch):
+    import time
+    from fe_sync.pdf_index import _safe_extract
+    import fe_sync.pdf_index as module
+    root=tmp_path/'FE';root.mkdir()
+    state=State(tmp_path/'state/files.sqlite')
+    path,key=create_test_file(root,state)
+    def hang(_path,_channel):
+        time.sleep(5)
+    monkeypatch.setattr(module,'_extract_worker',hang)
+    t0=time.monotonic()
+    status,terms,pages,total=_safe_extract(path,timeout=0.15)
+    assert status in ('timeout','bad_pdf')
+    assert time.monotonic()-t0<3
+    state.close()
