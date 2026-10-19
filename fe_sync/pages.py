@@ -41,7 +41,7 @@ STYLE = r'''
 .header{background:#fff;border-bottom:1px solid #d7d7d7;min-height:60px}.header-inner{max-width:1260px;margin:auto;display:flex;align-items:center;gap:24px;padding:10px 20px;min-height:60px}
 .brand{font-size:20px;font-weight:bold;letter-spacing:-.07em;white-space:nowrap;color:#323334}.brand span{font-weight:normal;color:#8e8e8e;letter-spacing:-.05em;margin:0 3px}.brand:hover{text-decoration:none}
 .top-links{display:flex;gap:22px;align-items:center;flex-wrap:wrap}.top-links a,.top-links span{font-size:12px;color:#3d4247;white-space:nowrap}.top-links a:hover{color:var(--red)}.top-links .current{font-weight:bold;color:#333}
-.top-right{margin-left:auto;font-size:11px;color:#6c7077;white-space:nowrap}.source-indicator{display:inline-flex;align-items:center;gap:6px}.source-indicator::before{content:'●';font-size:8px;color:#258467}
+.top-right{margin-left:auto;font-size:11px;color:#6c7077;white-space:nowrap}.top-right a{color:#1667a2;margin-right:15px;font-size:12px}.source-indicator{display:inline-flex;align-items:center;gap:6px}.source-indicator::before{content:'●';font-size:8px;color:#258467}
 .redbar{height:38px;background:var(--red);color:#fff}.redbar-inner{max-width:1260px;margin:auto;height:38px;display:flex;align-items:center;gap:0;padding:0 20px}
 .redbar .tab,.redbar span{display:inline-flex;align-items:center;height:38px;padding:0 18px;font-size:12px;color:#fff}.redbar .active{background:var(--red-dark);border-bottom:3px solid #fff;font-weight:bold}.redbar .mutedtab{opacity:.72}
 .container{max-width:1180px;margin:0 auto;padding:0 16px 60px}.breadcrumb{padding:15px 0 4px;font-size:12px;color:#757575}.breadcrumb a{color:#606871}
@@ -101,8 +101,9 @@ def local_href(current_dir: Path, target: Path) -> str:
     return quote(Path(os.path.relpath(target,current_dir)).as_posix(),safe='/')
 
 
-def page(title: str, content: str, updated: str, *, home: str = '', subject: bool = False) -> str:
+def page(title: str, content: str, updated: str, *, home: str = '', subject: bool = False, status_href: str = '') -> str:
     home=e(home or '#top')
+    status_link=(f'<a href="{e(status_href)}">Zadnja osvežitev</a>' if status_href else '')
     links=(f'<a href="{home}">Domov</a><a href="{home}" class="current">Moji predmeti</a>'
            '<span title="Samo na e.FE">Delavnice in izobraževanja</span>'
            '<span title="Samo na e.FE">Moj arhiv</span>')
@@ -118,7 +119,7 @@ def page(title: str, content: str, updated: str, *, home: str = '', subject: boo
             f'<title>{e(title)} · Lokalna e.FE</title><style>{STYLE}</style></head><body>{MARKER}'
             '<header id="top" class="header"><div class="header-inner">'
             f'<a class="brand" href="{home}">UL<span>|</span>FE</a><nav class="top-links" aria-label="Glavna navigacija">{links}</nav>'
-            '<div class="top-right"><span class="source-indicator">Lokalna kopija</span></div>'
+            f'<div class="top-right">{status_link}<span class="source-indicator">Lokalna kopija</span></div>'
             '</div></header><nav class="redbar" aria-label="Navigacija predmeta">'
             f'<div class="redbar-inner">{red}</div></nav>'
             f'<div class="container">{content}'
@@ -254,7 +255,7 @@ def render_course(root:Path,course:dict,modules:list[dict],records:list[dict],ma
           '<option value="web">Samo e.FE</option></select>'
           f'<span class="filter-note">{len(modules)} dejavnosti · {total} lokalnih datotek</span></div>'
           + ''.join(sections) + '<div id="noResults" class="no-results">Ni zadetkov za izbrane filtre.</div></main>')
-    return page(str(course['title']),body,updated,home=home,subject=True),total
+    return page(str(course['title']),body,updated,home=home,subject=True,status_href=local_href(index_dir,root/'Spletna-ucilnica/STANJE.html')),total
 
 
 def render_home(root:Path,courses:list[dict],course_totals:dict[int,int],updated:str)->str:
@@ -269,12 +270,12 @@ def render_home(root:Path,courses:list[dict],course_totals:dict[int,int],updated
                      f'<h2>{e(course["title"])}</h2><small>{total} lokalnih datotek</small></a>')
     body=(f'<div class="breadcrumb">Moji predmeti</div><div class="page-title"><h1>Moji predmeti</h1></div>'
           f'<main id="content" class="course-shell"><p class="numbers">{len(courses)} predmetov · '
-          f'{sum(course_totals.values())} lokalnih datotek</p><div class="filterbar">'
+          f'{sum(course_totals.values())} lokalnih datotek · <a href="STANJE.html">Kdaj je bilo nazadnje osveženo?</a></p><div class="filterbar">'
           '<input id="filterSearch" type="search" oninput="filterItems()" placeholder="Poišči predmet ..." '
           'aria-label="Poišči predmet"><span class="filter-note">Lokalni pregled e.FE</span></div>'
           f'<div class="coursegrid">{"".join(cards)}</div>'
           '<div id="noResults" class="no-results">Ni zadetkov.</div></main>')
-    return page('Moji predmeti',body,updated)
+    return page('Moji predmeti',body,updated,status_href='STANJE.html')
 
 
 def write_generated(root:Path,relative:Path,body:str)->None:
