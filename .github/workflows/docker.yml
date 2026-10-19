@@ -18,6 +18,7 @@ jobs:
           cache: pip
       - run: python -m pip install -r requirements.txt pytest
       - run: python -m compileall -q fe_sync
+      - run: bash -n scripts/obnovi-sejo.sh
       - run: python -m pytest -q
       - run: docker build -t fe-moodle-sync:test .
       - name: Test image imports and entrypoint
@@ -39,7 +40,7 @@ jobs:
         with:
           images: ghcr.io/lukacek/fe-splena-ucilnica-sync
           tags: |
-            type=raw,value=beta1.2.2,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=beta1.3,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
       - uses: docker/build-push-action@v6
         with:

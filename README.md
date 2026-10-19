@@ -203,3 +203,33 @@ ki ga Syncthing na tablici ne more ustvariti.
 
 Opomba: \`python -m fe_sync render\` sam ne izvaja selitve in ne
 nadomešča Moodle sinhronizacije; migracija se zgodi med ciklom \`loop\`.
+
+
+## beta1.3 — status in obnova Moodle prijave
+
+Po vsakem poskusu sinhronizacije, tudi neuspešnem, nastaneta pod
+FE/Spletna-ucilnica datoteki STANJE.html in STANJE.txt.
+Prikazujeta zadnjo res uspešno osvežitev (UTC), zadnji poskus in napake.
+Na glavni strani predmetov in v posameznem predmetu je povezava
+»Zadnja osvežitev«. Ni prijavnih piškotkov, gesel ali sesskey.
+
+### UL SSO podaljšaj z enim ukazom
+
+Enkrat shrani scripts/obnovi-sejo.sh iz repozitorija
+v ~/Downloads/obnovi-sejo.sh. Na Arch Linux prenosniku ohrani
+~/Downloads/fe_moodle_probe.py (v1.0.6), ~/Downloads/.venv
+z nameščenim Playwrightom in SSH dostop do admin@192.168.1.120.
+Ko seja poteče, izvedi: bash ~/Downloads/obnovi-sejo.sh
+
+Skripta odpre Chromium za ročno UL SSO prijavo, nato preveri dostop,
+prenese samo e.FE piškotke s SCP (0600), posodobi obstoječo sejsko
+datoteko v TrueNAS brez menjave bind-mount inode, jo zaščiti s chmod 600,
+odstrani vmesno kopijo in ponovno zažene Docker. Gesla ne shranjuje.
+
+### Nadgradnja
+
+V TrueNAS Custom App zamenjaj samo oznako slike na
+ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.3.
+Po prvem ciklu se STANJE.html in STANJE.txt posodobita samodejno.
+Za izris na podlagi že shranjenega status.json, brez novih Moodle klicev,
+lahko ročno izvedeš: sudo docker exec ix-fe-moodle-sync-fe-moodle-sync-1 python -m fe_sync render

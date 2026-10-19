@@ -6,6 +6,7 @@ from pathlib import Path
 import signal
 import threading
 from .sync import run_sync, atomic_json, render_cached
+from .status import publish_status
 
 stop=threading.Event()
 def halt(_signal,_frame):stop.set()
@@ -23,6 +24,8 @@ def main():
     if options.mode=='render':
         try:
             outcome=render_cached(fe_root,state_dir)
+            old_status=json.loads((state_dir/'status.json').read_text(encoding='utf-8'))
+            publish_status(fe_root,state_dir,old_status)
             print(json.dumps({'status':'ok','navigation':outcome},ensure_ascii=False),flush=True)
             return 0
         except Exception as exc:
