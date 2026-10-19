@@ -101,12 +101,16 @@ def local_href(current_dir: Path, target: Path) -> str:
     return quote(Path(os.path.relpath(target,current_dir)).as_posix(),safe='/')
 
 
-def page(title: str, content: str, updated: str, *, home: str = '', subject: bool = False, status_href: str = '') -> str:
+def page(title: str, content: str, updated: str, *, home: str = '', subject: bool = False, status_href: str = '', updates_href: str = '', calendar_href: str = '') -> str:
     home=e(home or '#top')
     status_link=(f'<a href="{e(status_href)}">Zadnja osvežitev</a>' if status_href else '')
     links=(f'<a href="{home}">Domov</a><a href="{home}" class="current">Moji predmeti</a>'
            '<span title="Samo na e.FE">Delavnice in izobraževanja</span>'
            '<span title="Samo na e.FE">Moj arhiv</span>')
+    if updates_href:
+        links+=f'<a href="{e(updates_href)}">Novosti</a>'
+    if calendar_href:
+        links+=f'<a href="{e(calendar_href)}">Koledar in roki</a>'
     red=('<a class="tab active" href="#content">Predmet</a>'
          '<span class="mutedtab" title="Samo na e.FE">Ocene</span>'
          '<span class="mutedtab" title="Samo na e.FE">Dejavnosti</span>'
@@ -286,7 +290,10 @@ def render_course(root:Path,course:dict,modules:list[dict],records:list[dict],ma
           '<option value="web">Samo e.FE</option></select>'
           f'<span class="filter-note">{len(modules)} dejavnosti · {total} lokalnih datotek</span></div>'
           + ''.join(sections) + '<div id="noResults" class="no-results">Ni zadetkov za izbrane filtre.</div></main>')
-    return page(str(course['title']),body,updated,home=home,subject=True,status_href=local_href(index_dir,root/'Spletna-ucilnica/STANJE.html')),total
+    return page(str(course['title']),body,updated,home=home,subject=True,
+                status_href=local_href(index_dir,root/'Spletna-ucilnica/STANJE.html'),
+                updates_href=local_href(index_dir,root/'Spletna-ucilnica/NOVOSTI.html'),
+                calendar_href=local_href(index_dir,root/'Spletna-ucilnica/KOLEDAR.html')),total
 
 
 def render_home(root:Path,courses:list[dict],course_totals:dict[int,int],updated:str)->str:
@@ -301,12 +308,15 @@ def render_home(root:Path,courses:list[dict],course_totals:dict[int,int],updated
                      f'<h2>{e(course["title"])}</h2><small>{total} lokalnih datotek</small></a>')
     body=(f'<div class="breadcrumb">Moji predmeti</div><div class="page-title"><h1>Moji predmeti</h1></div>'
           f'<main id="content" class="course-shell"><p class="numbers">{len(courses)} predmetov · '
-          f'{sum(course_totals.values())} lokalnih datotek · <a href="STANJE.html">Kdaj je bilo nazadnje osveženo?</a></p><div class="filterbar">'
+          f'{sum(course_totals.values())} lokalnih datotek · <a href="STANJE.html">Kdaj je bilo nazadnje osveženo?</a>'
+          ' · <a href="NOVOSTI.html">Novosti v gradivih</a>'
+          ' · <a href="KOLEDAR.html">Koledar in roki</a></p><div class="filterbar">'
           '<input id="filterSearch" type="search" oninput="filterItems()" placeholder="Poišči predmet ..." '
           'aria-label="Poišči predmet"><span class="filter-note">Lokalni pregled e.FE</span></div>'
           f'<div class="coursegrid">{"".join(cards)}</div>'
           '<div id="noResults" class="no-results">Ni zadetkov.</div></main>')
-    return page('Moji predmeti',body,updated,status_href='STANJE.html')
+    return page('Moji predmeti',body,updated,status_href='STANJE.html',
+                updates_href='NOVOSTI.html',calendar_href='KOLEDAR.html')
 
 
 def write_generated(root:Path,relative:Path,body:str)->None:
