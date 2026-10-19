@@ -62,7 +62,7 @@ def test_only_exact_authenticated_course_redirect_is_classified():
     '/course/view.php?id=3625&id=3791',
     '/course/view.php?id=%2E%2E',
     '/mod/forum/index.php?id=3625',
-]):
+])
     client=client_with_redirect(target)
     with pytest.raises(MoodleRedirect) as exc:
         client.get('/mod/forum/view.php',params={'id':123693})
