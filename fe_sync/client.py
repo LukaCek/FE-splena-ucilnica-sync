@@ -225,7 +225,7 @@ class MoodleClient:
         self.host=p.hostname
         self.timeout=timeout
         self.session=requests.Session()
-        self.session.headers.update({'User-Agent':'FE-Moodle-Sync/beta1.7 (personal read-only archive)',
+        self.session.headers.update({'User-Agent':'FE-Moodle-Sync/beta1.8 (personal read-only archive)',
             'Accept':'text/html,application/json,application/octet-stream,*/*'})
         self.read_cookies(session_file)
 

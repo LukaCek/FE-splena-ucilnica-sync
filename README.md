@@ -1,4 +1,4 @@
-# FE Moodle Sync — beta 1.7
+# FE Moodle Sync — beta 1.8
 
 Enosmerno, samodejno arhiviranje **datotek iz Moodle map** [e.FE](https://ucilnica-fe.uni-lj.si) na osebni TrueNAS, kjer jih obstoječi FE Gradiva MCP lahko bere. Ločen servis, brez lokalnega AI ali Chromiuma v Dockerju.
 
@@ -428,3 +428,44 @@ in PDF-ji ostanejo ohranjeni.
 \`Spletna-ucilnica/ISKANJE.html\` ter \`KOLEDAR.html\`.
 Zgodovina sprememb, število HTML strani in spletne povezave
 so še vedno pravilno označeni.
+
+
+## beta1.8 — iskanje po besedilu PDF-jev
+
+- Znotraj \`Spletna-ucilnica/ISKANJE.html\` je mogoče iskati po **besedah iz
+  besedilne plasti** PDF-jev, ki jih je program zanesljivo prenesel iz e.FE.
+  Primer: \`Coulombov zakon\` najde dokument, ki vsebuje **obe besedi**,
+  lahko na različnih mestih. To **ni iskanje natančnih fraz** ali
+  lematizacija; velike/male črke in slovenski šumniki so normalizirani.
+  Že obstoječe iskanje imen, predmetov, Moodle strani in dejavnosti ostaja.
+- Ob prvem zagonu se začne predobdelava obstoječih PDF-jev, brez spreminjanja
+  datotek in brez novega prenosa z e.FE. Besedne zbirke (ne izvorna besedila)
+  so shranjene **stisnjeno v SQLite** \`/state/files.sqlite\` pod
+  \`pdf_search_index\`. Napredovanje poteka postopoma, največ 400 na cikel,
+  največ približno 210 sekund dela na sinhronizacijo. Ponovne
+  sinhronizacije uporabljajo predpomnilnik, če se SHA izvirne datoteke in
+  lokalni podatki datoteke niso spremenili.
+- Branje posameznega PDF-ja poteka v izoliranem pomožnem procesu, z omejitvijo
+  25 sekund in 384 MiB naslovnega prostora. Dokumenti nad 50 MiB,
+  šifrirani/poškodovani PDF-ji in dokumenti brez besedilne plasti so
+  označeni kot nepodprti oziroma neiskalni. Zelo dolgi PDF-ji so
+  indeksirani **delno**, največ prvih 350 strani, največ 18.000 unikatnih
+  besed in 1.500.000 besedilnih znakov. Ni OCR, zato skenirane slike v PDF-ju
+  niso preiskljive.
+- V \`status.json\` se pojavi polje \`pdf_index\` s številom
+  \`total\`, \`searchable\`, \`ready\`, \`partial\`, \`no_text\`,
+  \`unsupported\`, \`bad_pdf\`, \`timeout\`, \`modified\`,
+  \`pending\`, \`processed\`, \`cached\`. \`navigation.search.pdf_word_entries\`
+  prikazuje število dejansko v HTML indeksiranih PDF-jev.
+- Iskalni indeks je **vdelan v lokalno HTML stran**: ne zahteva interneta,
+  datotečnega strežnika, JavaScript \`fetch\` ali oblačnega API-ja.
+  PDF-ji se ne nalagajo ali pošiljajo tretjim ponudnikom. Uporabnikovi
+  ročni zapiski in nenadzorovane datoteke niso vključeni.
+- Če se PDF lokalno spremeni in se ne ujema s prvotno preneseno SHA,
+  njegova stara iskalna vsebina ni prikazana, njegovih sprememb pa
+  program ne prepisuje. Datotek in obstoječih SQLite podatkov ni treba brisati.
+- Nadgradnja TrueNAS: uporabi
+  \`ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.8\`. Po prvem ciklu
+  preveri \`pdf_index.pending\`: če je večji od 0, bodo preostali PDF-ji
+  obdelani v naslednjih ciklih (privzeto vsakih 2 h). \`render\` samo
+  prebere že pripravljen PDF predpomnilnik, ne prične novega indeksiranja.
