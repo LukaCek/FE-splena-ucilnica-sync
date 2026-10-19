@@ -1,8 +1,11 @@
-# FE Moodle Sync — beta 1.4
+# FE Moodle Sync — beta 1.6
 
 Enosmerno, samodejno arhiviranje **datotek iz Moodle map** [e.FE](https://ucilnica-fe.uni-lj.si) na osebni TrueNAS, kjer jih obstoječi FE Gradiva MCP lahko bere. Ločen servis, brez lokalnega AI ali Chromiuma v Dockerju.
 
-**Stanje:** beta 1.4. Predhodna namestitev je uspešno prenesla 222 datotek iz Moodle map pri 11 predmetih. Beta 1.4 dodaja prenos samostojnih Moodle datotek (`resource`); ta nova funkcija je preizkušena z lokalnimi simulacijami, dejanska zasebna e.FE seja pa zahteva preverjanje na TrueNAS-u.
+**Stanje:** beta 1.5.1 je na TrueNAS-u 19. 10. 2026 uspešno preverila 11 predmetov,
+354 shranjenih datotek, 19/19 lokalnih strani, 3 forumske objave in 2 prilogi.
+Beta 1.6 dodaja novosti in koledar na osnovi preverljivih Moodle podatkov;
+dostop do koledarskega API-ja na konkretni e.FE namestitvi je treba še preveriti.
 
 ## Kaj zmore
 
@@ -340,3 +343,44 @@ Preusmeritev na prijavo, drugi predmet, zunanjo domeno ali nepričakovane
 parametre še vedno pomeni napako. Ni oslabljene varnostne omejitve.
 Za nadgradnjo uporabi `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.5.1`.
 Ne briši baze, sejnih piškotkov, PDF-jev ali zapiskov.
+
+
+## beta1.6 — novosti in koledar (19. oktober 2026)
+
+**Novosti:** Po vsaki sinhronizaciji primerja dejansko prenesene datoteke in
+upravljane besedilne zapiske (Moodle Stran/Obvestila) s stanjem ob začetku
+cikla. Novo ali spremenjeno gradivo zapiše v SQLite zgodovino, omejeno na
+zadnjih 30 dni in 300 zapisov. Novosti niso isto kot vse spremembe na
+Moodle: spremembe nedostopnih kvizov, oddaj in strani brez podprtega
+besedila ne morejo biti odkrite. Osebne zapiske zunaj upravljanih
+Spletna-ucilnica map ignorira in jih nikoli ne prepisuje.
+V lokalni učilnici odpri `Spletna-ucilnica/NOVOSTI.html` ali besedilni
+`NOVOSTI.txt`. Zgodovina se ne izbriše po vsaki naslednji sinhronizaciji.
+
+**Koledar:** Uporablja izključno e.FE-jev **bralni** Moodle AJAX klic
+`core_calendar_get_action_events_by_timesort`. Zahteva le dogodke zadnjih
+7 in prihodnjih 183 dni; prikaže samo dogodke, katerih course ID ustreza
+vpisanemu predmetu in imajo preverljiv celoštevilski UNIX čas. Za
+`rok` označi samo jasno označene Moodle akcijske dogodke
+`due/submission/submissiondue` za `assign/quiz`, vse druge dogodke
+kot `dogodek`. Ure na lokalni strani so označene **UTC**; prikazan čas
+ni vedno rok oddaje. Moodle API lahko vrne le akcijske dogodke, torej
+to **ni popoln urnik vseh kolokvijev**. Za pravo veljavnost in oddajo
+naloge vedno preveri izvirno e.FE.
+
+Če je API podprt, `Spletna-ucilnica/KOLEDAR.html` vsebuje dogodke in
+`Spletna-ucilnica/KOLEDAR.ics` standarden iCalendar za **ročen uvoz**.
+Uvoz .ics ni naročnina in se ne posodablja samodejno v aplikaciji
+Koledar. Če Moodle zavrne API, lokalna stran pošteno napiše, da
+koledarski podatki niso na voljo; ni izmišljenih datumov.
+Morebitni prejšnji ICS se takrat ne briše. Če je odziv omejen
+(več kot 200 dogodkov), se to jasno označi.
+Koledarja ali drugih podatkov ne pošiljamo tretjim strežnikom.
+
+Namestitev: zamenjaj samo Docker oznako na
+`ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.6`.
+Obstoječe SQLite baze, piškotkov, PDF-jev in Syncthing map NE briši.
+Po zaključku poglej `status.json`: nova polja `changes` ter
+`calendar` (z `available`, `events`, `truncated`). Ob nedosegljivem
+koledarju lahko osnovna sinhronizacija vseeno uspe, a status to
+posebej navede kot `calendar.available=false`.
