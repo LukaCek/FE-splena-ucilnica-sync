@@ -292,3 +292,32 @@ Popravek:
 Namesti le `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.4.1`.
 Ne briši `files.sqlite`, PDF-jev ali prijavnih piškotkov. Po prvem
 avtomatskem ciklu preveri `status.json` in lokalni HTML.
+
+
+## beta1.5 — lokalne Moodle strani in obvestila (omejen bralni arhiv)
+
+- Zajem do 19 Moodle dejavnosti tipa Stran, samo besedila iz izrecnih
+  Moodle vsebinskih blokov (npr. \`no-overflow\`). Neprepoznani prikazi se
+  ne shranijo; izvirna e.FE povezava ostane.
+- Arhiv forumov, katerih naslov vsebuje Obvestila / Forum novic /
+  Announcements / News: največ 5 prvih razprav **v vrstnem redu, kot jih
+  prikaže Moodle**, ne nujno kronološko najnovejših.
+- Besedilo prve prepoznane objave v razpravi se shrani kot varen lokalni HTML
+  in Markdown, brez izvirnega HTML-ja, skript, obrazcev, piškotkov ali sesskey.
+- Priloge prenese samo iz varnih poti \`mod_forum/attachment\` na uradni e.FE
+  (največ 12 na razpravo), s preverjanjem PDF-podpisa, dovoljenih končnic,
+  velikosti, SHA-256 in zaščito pred spremembami.
+- Na posamezni strani predmeta lahko odpreš lokalno kopijo pod
+  \`Gradiva/Moodle-strani/<ime>__<id>/index.html\` oziroma
+  \`Gradiva/Obvestila/<ime>__<id>/index.html\`. Poleg HTML nastane tudi
+  datoteka \`.md\`, ki jo lahko indeksira FE Gradiva.
+- Oddelek ostane povezava na e.FE, če parser ne prepozna vsebine;
+  arhiv nima samodejnega oddajanja nalog ali spreminjanja forumov.
+- Status \`status.json\` vključuje \`pages_found\`, \`pages_archived\`,
+  \`pages_unsupported\`, \`pages_errors\`, \`announcements_found\`,
+  \`announcement_posts_archived\`, \`announcement_attachments_processed\`.
+- Pred namestitvijo na TrueNAS je treba preveriti GitHub Actions ter nato
+  na pravi e.FE seji preveriti, katere Moodle različice strani/forumi
+  dejansko ustrezajo parserju. Testi uporabljajo sintetične HTML primere.
+- Nadgradi le sliko na \`ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.5\`;
+  ohrani volumne in SQLite. \`render\` ne zajema novih vsebin.
