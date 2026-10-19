@@ -140,6 +140,7 @@ def render_search(root:Path,courses:list[dict],module_lists:dict[int,list[dict]]
     relative=Path('Spletna-ucilnica/ISKANJE.html')
     home=root/'Spletna-ucilnica'
     entries=search_entries(root,courses,module_lists,records,pdf_terms=pdf_terms)
+    pdf_word_entries=sum(bool(item.get('pdf_terms')) for item in entries)
     items=[]
     for ent in entries:
         target=ent['target']
@@ -170,6 +171,8 @@ def render_search(root:Path,courses:list[dict],module_lists:dict[int,list[dict]]
         'Skenirani PDF-ji brez besedilne plasti zahtevajo OCR in niso vključeni; '
         'zelo veliki ali obsežni PDF-ji so lahko obdelani le delno. '
         'Ne preiskuje tvojih osebnih zapiskov.</p>'
+        f'<p class="muted-info">Z besedami iz vsebine je indeksiranih {pdf_word_entries} PDF-jev. '
+        'Na prvem zagonu lahko indeksiranje še poteka; napredek je v STANJE.html.</p>'
         '<div class="search-controls">'
         '<label for="globalSearch">Iskalni niz'
         '<input id="globalSearch" type="search" placeholder="Npr. kolokvij, PDF, elektrotehnika ..." '
@@ -191,4 +194,4 @@ def render_search(root:Path,courses:list[dict],module_lists:dict[int,list[dict]]
     write_generated(root,relative,html)
     return {'items':len(entries),'home':relative.as_posix(),
             'embedded':True,'limited':len(entries)>=MAX_RESULTS,
-            'pdf_word_entries':sum(bool(ent.get('pdf_terms')) for ent in entries)}
+            'pdf_word_entries':pdf_word_entries}
