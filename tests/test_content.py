@@ -32,6 +32,13 @@ def test_unrecognized_or_login_markup_rejected():
         extract_body('<form action="/login/index.php"><input name="username"></form>','page')
 
 
+
+
+def test_forum_prefers_first_original_post_not_longest_reply():
+    html=('<div class="post-content-container">Originalno obvestilo.</div>'
+          '<div class="post-content-container">Daljši odgovor ' + ('nepomemben ' * 50) + '</div>')
+    assert extract_body(html,'post')=='Originalno obvestilo.'
+
 def test_forum_discover_only_same_host_token_free_discussions():
     parser=DiscussionLinks(BASE)
     parser.feed(
