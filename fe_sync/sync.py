@@ -65,6 +65,12 @@ def resource_dir(module:dict) -> Path:
     return Path('Gradiva')/'Samostojne-datoteke'/f'{title}__{module["id"]}'
 
 
+def forum_dir(module:dict) -> Path:
+    """Managed forum attachments, separate from user notes."""
+    from .content import forum_dir as content_forum_dir
+    return content_forum_dir(module)
+
+
 def ensure_safe_parent(root:Path,relative:Path) -> Path:
     """Refuse directory symlinks, traversal, and paths outside the configured FE root."""
     if relative.is_absolute() or not relative.parts or any(p in ('','.', '..') for p in relative.parts):
@@ -190,10 +196,13 @@ class Result:
 def store_file(client:MoodleClient,state:State,root:Path,course:dict,module:dict,
                remote:RemoteFile,result:Result,max_bytes:int=MAX_CONTENT_BYTES):
     key=f'{course["id"]}/{module["id"]}/'+ '/'.join(remote.path)
-    is_resource=module['type']=='resource'
-    base_path=course_dir(course)/(resource_dir(module) if is_resource else folder_dir(module))
-    # Portable filename, preserving the validated remote URL.
-    local_parts=resource_local_path(remote.path) if is_resource else remote.path
+    kind=module['type']
+    is_resource=kind=='resource'
+    is_forum=kind=='forum'
+    base_path=course_dir(course)/(resource_dir(module) if is_resource else
+                                 forum_dir(module) if is_forum else folder_dir(module))
+    # Portable filenames for Android, without modifying Moodle's remote URLs.
+    local_parts=resource_local_path(remote.path) if (is_resource or is_forum) else remote.path
     rel=base_path.joinpath(*local_parts)
     for name in remote.path: safe_part(name,180)
     dest=ensure_safe_parent(root,rel)
@@ -214,6 +223,10 @@ def store_file(client:MoodleClient,state:State,root:Path,course:dict,module:dict
     if is_resource:
         if not RESOURCE_FILE_RE.fullmatch(remote.url_path.split('?',1)[0]):
             raise ValueError('invalid resource file path')
+    elif is_forum:
+        from .content import FORUM_FILE_RE
+        if not FORUM_FILE_RE.fullmatch(remote.url_path.split('?',1)[0]):
+            raise ValueError('invalid forum attachment path')
     elif not re.fullmatch(r'/pluginfile\.php/\d+/mod_folder/content/\d+/.+',remote.url_path):
         raise ValueError('invalid remote file path')
     response=client.get(remote.url_path,headers=headers,stream=True)
@@ -312,9 +325,12 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
             module_lists[course_id]=modules
             folders=[m for m in modules if m['type']=='folder']
             resources=[m for m in modules if m['type']=='resource']
+            pages=[m for m in modules if m['type']=='page']
+            from .content import is_announcement
+            announcements=[m for m in modules if is_announcement(m)]
             course_info={'id':course_id,'title':course['title'],'shortname':course['shortname'],
                 'modules':modules,'synced_at':utcnow(),
-                'limitations':'beta1.4.1 syncs folder and single-file resource activities; forums, quizzes, tasks and deadlines are not mirrored.'}
+                'limitations':'beta1.5 archives supported Moodle pages and announcement posts as escaped plain text; interactive activities and deadlines are not mirrored.'}
             atomic_json(root,directory/'predmet.json',course_info)
             summary['subjects'].append({'id':course_id,'title':course['title'],'folders':len(folders),
                                         'resources':len(resources),
@@ -369,6 +385,41 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
                     result.errors+=1
                     summary['resources_errors']=summary.get('resources_errors',0)+1
                     print(f'Resource sync error: course={course_id} module={resource["id"]} type={type(exc).__name__}',flush=True)
+            # Plain text snapshots only. Unsupported Moodle layouts stay as e.FE links.
+            from .content import archive_page,archive_forum
+            summary['pages_found']=summary.get('pages_found',0)+len(pages)
+            summary['announcements_found']=summary.get('announcements_found',0)+len(announcements)
+            for item in pages:
+                if not callable(getattr(client,'html',None)):
+                    summary['pages_unsupported']=summary.get('pages_unsupported',0)+1
+                    continue
+                if delay:time.sleep(delay)
+                try:
+                    if archive_page(client,root,course,item):
+                        summary['pages_archived']=summary.get('pages_archived',0)+1
+                    else:
+                        summary['pages_unsupported']=summary.get('pages_unsupported',0)+1
+                except (MoodleError,ValueError,OSError,requests.RequestException) as exc:
+                    result.errors+=1
+                    summary['pages_errors']=summary.get('pages_errors',0)+1
+                    print(f'Page archive error: course={course_id} module={item["id"]} type={type(exc).__name__}',flush=True)
+            for item in announcements:
+                if not callable(getattr(client,'html',None)):
+                    summary['announcements_unsupported']=summary.get('announcements_unsupported',0)+1
+                    continue
+                if delay:time.sleep(delay)
+                try:
+                    posts,attachments=archive_forum(client,state,root,course,item,
+                                                     store_file,result,delay=delay)
+                    if posts:
+                        summary['announcement_posts_archived']=summary.get('announcement_posts_archived',0)+posts
+                        summary['announcement_attachments_processed']=summary.get('announcement_attachments_processed',0)+attachments
+                    else:
+                        summary['announcements_unsupported']=summary.get('announcements_unsupported',0)+1
+                except (MoodleError,ValueError,OSError,requests.RequestException) as exc:
+                    result.errors+=1
+                    summary['announcements_errors']=summary.get('announcements_errors',0)+1
+                    print(f'Forum archive error: course={course_id} module={item["id"]} type={type(exc).__name__}',flush=True)
         # Generate a self-contained, offline HTML navigation after mirroring files.
         # Module information is only copied from explicitly read e.FE pages.
         try:
