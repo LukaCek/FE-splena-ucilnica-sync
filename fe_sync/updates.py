@@ -162,6 +162,7 @@ def render_history(root:Path,entries:list[dict])->dict:
           +'</main>')
     now=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
     write_generated(root,Path('Spletna-ucilnica/NOVOSTI.html'),
-                   page('Novosti',body,now,home='index.html',status_href='STANJE.html'))
+                   page('Novosti',body,now,home='index.html',status_href='STANJE.html',
+                        search_href='ISKANJE.html',calendar_href='KOLEDAR.html'))
     write_text(root,Path('Spletna-ucilnica/NOVOSTI.txt'),'\n'.join(plain)+'\n')
     return {'shown':len(lines)}

@@ -1,4 +1,4 @@
-# FE Moodle Sync — beta 1.6
+# FE Moodle Sync — beta 1.7
 
 Enosmerno, samodejno arhiviranje **datotek iz Moodle map** [e.FE](https://ucilnica-fe.uni-lj.si) na osebni TrueNAS, kjer jih obstoječi FE Gradiva MCP lahko bere. Ločen servis, brez lokalnega AI ali Chromiuma v Dockerju.
 
@@ -384,3 +384,47 @@ Po zaključku poglej `status.json`: nova polja `changes` ter
 `calendar` (z `available`, `events`, `truncated`). Ob nedosegljivem
 koledarju lahko osnovna sinhronizacija vseeno uspe, a status to
 posebej navede kot `calendar.available=false`.
+
+
+## beta1.7 — globalno iskanje, priljubljeni predmeti in slovenski koledar
+
+**ISKANJE.html** je nova globalna iskalna stran. Po vseh vpisanih
+predmetih išče imena prenešenih datotek, gradiv in dejavnosti ter do 2.400
+znakov iz besedil varno arhiviranih Moodle strani in objav. Vrste rezultatov:
+predmeti, PDF, dokumenti, slike, koda, arhivi, Moodle strani/obvestila,
+druge datoteke in dejavnosti, ki so na voljo samo na e.FE.
+Filtri omogočajo tudi izbiro posameznega predmeta. Na lokalno shranjene
+datoteke se poveže neposredno; spletne dejavnosti vodijo na e.FE.
+Celoten indeks rezultatov je znotraj ene generirane HTML datoteke in
+deluje tudi prek Androidovega \`file://\` dostopa **brez zunanjega JS,
+fetch() ali spletnega strežnika**. Ne izvaja iskanja znotraj PDF,
+Word/PowerPoint ali osebnih zapiskov; druge zasebne FE datoteke ne
+postanejo del indeksa. Omejitev je 5.000 indeksiranih zadetkov.
+
+**Priljubljeni predmeti**: na domači strani klikni zvezdico na kartici
+predmeta. Priljubljeni so prikazani prvi. Nastavitev se shrani izključno
+v \`localStorage\` trenutnega brskalnika, kadar ta to dovoljuje.
+Pri nekaterih Android brskalnikih ali pregledovalnikih \`file://\`
+shranjevanje ne deluje; takrat zvezdica velja samo do zaprtja strani.
+**Priljubljenih Syncthing ne sinhronizira med napravami**, ker ostajajo
+lokalna nastavitev brskalnika.
+
+**KOLEDAR.html**: dogodke iz preverjenih UNIX datumov pretvori v
+slovenski čas prek \`Europe/Ljubljana\` in upošteva poletni/zimski čas
+(CEST = UTC+2, CET = UTC+1). Dogodki so združeni po dnevih; gumbi
+ločijo jasno označene roke oddaje od drugih dogodkov. Ničesar ne
+sklepa iz naslovov ali opisov kolokvijev. \`.ics\` še naprej vsebuje
+pravilne UTC datume; ob uvozu jih koledarska aplikacija pretvori sama.
+Odvisnost \`tzdata\` zagotovi časovni pas tudi v minimalnem Dockerju.
+
+**Varnost:** Program ostaja enosmeren in samo bere e.FE. Ne spreminja
+izvirnih profesorjevih gradiv, oddaj ali kvizov, ne shranjuje piškotkov
+v FE mapo in ne briše ročnih zapiskov. Obstoječi \`status.json\`, SQLite
+in PDF-ji ostanejo ohranjeni.
+
+**Nadgradnja TrueNAS:** zamenjaj samo sliko na
+\`ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.7\`. Nato preveri
+\`navigation.search.items\` v \`status.json\` in odpri
+\`Spletna-ucilnica/ISKANJE.html\` ter \`KOLEDAR.html\`.
+Zgodovina sprememb, število HTML strani in spletne povezave
+so še vedno pravilno označeni.
