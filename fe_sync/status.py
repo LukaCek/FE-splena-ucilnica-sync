@@ -102,6 +102,19 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
         recent_count=max(0,int(changes.get('recent',0)))
     except (ValueError,TypeError):
         recent_count=0
+    pdf=summary.get('pdf_index') or {}
+    def pdf_count(name):
+        try:return max(0,int(pdf.get(name,0)))
+        except (ValueError,TypeError):return 0
+    pdf_total=pdf_count('total')
+    pdf_ready=pdf_count('searchable')
+    pdf_pending=pdf_count('pending')
+    pdf_no_text=pdf_count('no_text')
+    pdf_part=pdf_count('partial')
+    pdf_notice=(f'Iskanje po besedilu PDF: {pdf_ready}/{pdf_total} datotek, '
+                f'čaka {pdf_pending}, brez besedila {pdf_no_text}, delno {pdf_part}.'
+                if 'total' in pdf else
+                'Iskanje PDF: indeks še ni na voljo.')
     txt = (f'{TEXT_MARKER}\n\nLOKALNA SPLETNA UČILNICA FE\n'
            f'Zadnja uspešna osvežitev: {last_label}\n'
            f'Zadnji poskus: {check_label}\n'
@@ -110,7 +123,8 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
            f'Tip napake: {reason or "-"}\n'
            f'{forum_notice}'
            f'Koledar e.FE: {calendar_label}\n'
-           f'Novosti zadnjih 30 dni: {recent_count}\n\n'
+           f'Novosti zadnjih 30 dni: {recent_count}\n'
+           f'{pdf_notice}\n\n'
            'Ko seja poteče, na prenosniku izvedi:\n'
            'bash ~/Downloads/obnovi-sejo.sh\n'
            'Prijava prek UL SSO je ročna. Piškotki ostanejo zunaj mape FE.\n')
@@ -141,6 +155,7 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
             f'<p>Novosti zadnjih 30 dni: <strong>{recent_count}</strong> '
             '<a href="NOVOSTI.html">Poglej novosti</a> · '
             '<a href="KOLEDAR.html">Poglej koledar</a></p>'
+            f'<p>{h(pdf_notice)} <a href="ISKANJE.html">Iskanje vseh gradiv</a></p>'
             f'{f"<p>Vrsta napake: {h(reason)}</p>" if reason else ""}'
             '<hr><h2>Ko prijava poteče</h2>'
             '<p>Na prenosniku zaženi <code>bash ~/Downloads/obnovi-sejo.sh</code>. '
