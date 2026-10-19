@@ -68,7 +68,7 @@ def extract_body(markup,kind):
         raise MoodleError('login page instead of content')
     parser=TextBlocks(PAGE_CLASSES if kind=='page' else POST_CLASSES)
     parser.feed(markup)
-    return max(parser.results,key=len) if parser.results else None
+    return (parser.results[0] if kind=='post' else max(parser.results,key=len)) if parser.results else None
 
 
 def is_announcement(module):
@@ -226,7 +226,9 @@ def archive_forum(client,state,root,course,module,store_file,result,delay=0):
         if delay:sleep(delay)
         try:
             body,remotes=read_discussion(client,ident)
-        except (MoodleError,ValueError,OSError,requests.RequestException):
+        except (MoodleError,ValueError,OSError,requests.RequestException) as exc:
+            result.errors+=1
+            print(f'Forum discussion error: course={course["id"]} module={module["id"]} type={type(exc).__name__}',flush=True)
             continue
         if not body:continue
         for remote in remotes:
