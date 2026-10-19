@@ -140,7 +140,7 @@ def write_calendar_ics(root,body:str)->None:
         # not trigger a new Syncthing transfer on every scheduled cycle.
         def without_export_stamp(value):
             return re.sub(r'^DTSTAMP:[0-9]{8}T[0-9]{6}Z$', '',
-                          value.replace('\\r\\n','\\n'), flags=re.M)
+                          value.replace('\r\n','\n'), flags=re.M)
         if without_export_stamp(existing)==without_export_stamp(body):
             return
     fd,temp=tempfile.mkstemp(prefix='.fe-calendar-',dir=dest.parent)
