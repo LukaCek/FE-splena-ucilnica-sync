@@ -3,7 +3,7 @@
 # Do NOT paste Moodle cookies or passwords into this Compose/GitHub.
 services:
   fe-moodle-sync:
-    image: ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.4
+    image: ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.4.1
     restart: unless-stopped
     command: ["python", "-m", "fe_sync", "loop"]
     environment:
