@@ -42,7 +42,12 @@ def test_generated_index_links_are_valid_and_offline(tmp_path,monkeypatch):
     root=tmp_path/'FE';root.mkdir();state=tmp_path/'state';state.mkdir()
     result=run_sync(root,state/'data.sqlite',tmp_path/'secret',client_factory=FakeClient,delay=0)
     assert result['status']=='ok',result
-    assert result['navigation']=={'pages':3,'local_files_linked':2,'home':'Spletna-ucilnica/index.html'}
+    assert result['navigation']['pages']==3
+    assert result['navigation']['local_files_linked']==2
+    assert result['navigation']['home']=='Spletna-ucilnica/index.html'
+    assert result['navigation']['search']['embedded'] is True
+    assert result['navigation']['search']['items'] >= 1
+    assert (root/'Spletna-ucilnica/ISKANJE.html').is_file()
     home=root/'Spletna-ucilnica/index.html'
     math=root/'1-semester/01_MAT/Spletna-ucilnica/index.html'
     code=root/'1-semester/03_PROG/Spletna-ucilnica/index.html'
