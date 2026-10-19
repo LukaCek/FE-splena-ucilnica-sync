@@ -317,6 +317,14 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
         summary['finished_at']=utcnow()
         summary['files']=vars(result)
         state.close()
+        # Linked status pages exist even if run_sync is invoked directly.
+        try:
+            from .status import publish_status
+            publish_status(root,state_path.parent,summary)
+        except (ValueError,OSError) as exc:
+            summary['status_publish_error_type']=type(exc).__name__
+            print(f'Sync status publication error: {type(exc).__name__}',flush=True)
+            if summary['status']=='ok':summary['status']='partial'
     return summary
 
 
