@@ -22,6 +22,16 @@ class MoodleError(RuntimeError):
     pass
 
 
+class MoodleRedirect(MoodleError):
+    """Denied redirect; only a verified course overview ID may be inspected.
+
+    Other destinations are intentionally not followed or included in logs.
+    """
+    def __init__(self, course_id: int | None = None):
+        super().__init__('redirect: session expired or restricted resource')
+        self.course_id = course_id
+
+
 def safe_part(name: str, max_length: int = 140) -> str:
     if not isinstance(name, str) or not name or len(name) > 250:
         raise ValueError('invalid path component')
@@ -215,7 +225,7 @@ class MoodleClient:
         self.host=p.hostname
         self.timeout=timeout
         self.session=requests.Session()
-        self.session.headers.update({'User-Agent':'FE-Moodle-Sync/beta1.5 (personal read-only archive)',
+        self.session.headers.update({'User-Agent':'FE-Moodle-Sync/beta1.5.1 (personal read-only archive)',
             'Accept':'text/html,application/json,application/octet-stream,*/*'})
         self.read_cookies(session_file)
 
@@ -256,7 +266,27 @@ class MoodleClient:
                 # hammering the server when a connection is briefly reset.
                 time.sleep(1 << attempt)
         if response.status_code in (301,302,303,307,308):
-            response.close();raise MoodleError('redirect: session expired or restricted resource')
+            # This remains a refused redirect. Extract ONLY an exact, same-origin
+            # /course/view.php?id=N destination for callers that can safely
+            # classify a forum being sent back to its parent course.
+            target_course = None
+            try:
+                location = response.headers.get('Location', '')
+                parsed = urlsplit(urljoin(self.base + '/', location))
+                args = parse_qs(parsed.query, keep_blank_values=True)
+                values = args.get('id', [])
+                if (parsed.scheme == 'https' and parsed.hostname == self.host
+                    and parsed.port in (None,443) and not parsed.username
+                    and not parsed.password and not parsed.fragment
+                    and parsed.path == '/course/view.php'
+                    and set(args) == {'id'} and len(values) == 1
+                    and values[0].isascii() and values[0].isdecimal()
+                    and 0 < int(values[0]) < 2**31):
+                    target_course = int(values[0])
+            except (ValueError, TypeError):
+                pass
+            response.close()
+            raise MoodleRedirect(course_id=target_course)
         if response.status_code in (401,403):
             response.close();raise MoodleError('access denied or session expired')
         return response

@@ -83,12 +83,21 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
     # URLs, filesystem paths, session keys or credentials.
     reason = reason if reason.isidentifier() and len(reason) <= 60 else ''
     last_label, check_label = safe_time(last), safe_time(summary.get('finished_at'))
+    # An inaccessible forum redirected to the same course is unsupported,
+    # not a failed sync. Show it explicitly even when other work succeeded.
+    try:
+        forum_warnings = max(0,int(summary.get('announcements_returned_to_course',0)))
+    except (ValueError,TypeError):
+        forum_warnings = 0
+    forum_notice = (f'Neprebrani forumi (preusmerjeni na predmet): {forum_warnings}\\n'
+                    if forum_warnings else '')
     txt = (f'{TEXT_MARKER}\n\nLOKALNA SPLETNA UČILNICA FE\n'
            f'Zadnja uspešna osvežitev: {last_label}\n'
            f'Zadnji poskus: {check_label}\n'
            f'Stanje zadnjega poskusa: {state_name}\n'
            f'Napake datotek: {errors}\n'
-           f'Tip napake: {reason or "-"}\n\n'
+           f'Tip napake: {reason or "-"}\n'
+           f'{forum_notice}\n'
            'Ko seja poteče, na prenosniku izvedi:\n'
            'bash ~/Downloads/obnovi-sejo.sh\n'
            'Prijava prek UL SSO je ročna. Piškotki ostanejo zunaj mape FE.\n')
@@ -114,6 +123,9 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
             f'<p>Zadnji poskus: <strong>{h(check_label)}</strong></p>'
             f'<p style="color:{colors[state]}"><strong>Stanje: {h(state_name)}</strong></p>'
             f'<p>Napake datotek: {errors}</p>'
+            +(f'<p style="color:#926208">Opozorilo: {forum_warnings} forum(ov) '
+              'preusmerja na pregled predmeta in ni arhiviranih.</p>'
+              if forum_warnings else '')
             f'{f"<p>Vrsta napake: {h(reason)}</p>" if reason else ""}'
             '<hr><h2>Ko prijava poteče</h2>'
             '<p>Na prenosniku zaženi <code>bash ~/Downloads/obnovi-sejo.sh</code>. '

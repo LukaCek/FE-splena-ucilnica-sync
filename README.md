@@ -321,3 +321,22 @@ avtomatskem ciklu preveri `status.json` in lokalni HTML.
   dejansko ustrezajo parserju. Testi uporabljajo sintetične HTML primere.
 - Nadgradi le sliko na \`ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.5\`;
   ohrani volumne in SQLite. \`render\` ne zajema novih vsebin.
+
+
+## beta1.5.1 — forum, ki preusmeri na pregled predmeta
+
+Primer: MakerLab, Moodle modul 123693 vrne HTTP 303, medtem ko
+uporabnikova prijavljena stran in predmet odgovarjata HTTP 200.
+
+Če `/mod/forum/view.php?id=N` preusmeri na **isti uradni e.FE
+`/course/view.php?id=C`**, in je `C` natanko ID obdelovanega
+predmeta brez dodatnih parametrov, to obravnavamo kot nepodprto oziroma
+neprebrano forumsko dejavnost. Brez sledenja preusmeritvi, brez
+pretvarjanja, da je bila vsebina prenesena. V statusu sta
+`announcements_unsupported` in `announcements_returned_to_course`,
+STANJE.html/txt pa prikažeta opozorilo.
+
+Preusmeritev na prijavo, drugi predmet, zunanjo domeno ali nepričakovane
+parametre še vedno pomeni napako. Ni oslabljene varnostne omejitve.
+Za nadgradnjo uporabi `ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.5.1`.
+Ne briši baze, sejnih piškotkov, PDF-jev ali zapiskov.

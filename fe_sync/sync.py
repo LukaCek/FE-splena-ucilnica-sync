@@ -386,7 +386,7 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
                     summary['resources_errors']=summary.get('resources_errors',0)+1
                     print(f'Resource sync error: course={course_id} module={resource["id"]} type={type(exc).__name__}',flush=True)
             # Plain text snapshots only. Unsupported Moodle layouts stay as e.FE links.
-            from .content import archive_page,archive_forum
+            from .content import archive_page,archive_forum,ForumReturnedToCourse
             summary['pages_found']=summary.get('pages_found',0)+len(pages)
             summary['announcements_found']=summary.get('announcements_found',0)+len(announcements)
             for item in pages:
@@ -416,6 +416,13 @@ def run_sync(root:Path,state_path:Path,cookie_file:Path,max_courses:int=100,
                         summary['announcement_attachments_processed']=summary.get('announcement_attachments_processed',0)+attachments
                     else:
                         summary['announcements_unsupported']=summary.get('announcements_unsupported',0)+1
+                except ForumReturnedToCourse:
+                    # Moodle explicitly redirected the forum to this same
+                    # course. Nothing was archived; report that transparently,
+                    # but this is not a failed download or an expired session.
+                    summary['announcements_unsupported']=summary.get('announcements_unsupported',0)+1
+                    summary['announcements_returned_to_course']=summary.get('announcements_returned_to_course',0)+1
+                    print(f'Forum not archived (returned to course): course={course_id} module={item["id"]}',flush=True)
                 except (MoodleError,ValueError,OSError,requests.RequestException) as exc:
                     result.errors+=1
                     summary['announcements_errors']=summary.get('announcements_errors',0)+1

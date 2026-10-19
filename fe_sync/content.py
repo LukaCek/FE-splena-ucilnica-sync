@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 from urllib.parse import parse_qs, urljoin, urlsplit
 
-from .client import BASE, MoodleError, RemoteFile, safe_remote_path
+from .client import BASE, MoodleError, MoodleRedirect, RemoteFile, safe_remote_path
 from .resources import portable_part
 
 MAX_HTML=4_000_000
@@ -153,9 +153,21 @@ class Attachments(HTMLParser):
             self.files.append(item)
 
 
-def read_forum(client,module_id):
+class ForumReturnedToCourse(MoodleError):
+    """The forum sent the authenticated reader back to its parent course."""
+
+
+def read_forum(client,module_id,course_id=None):
     if type(module_id) is not int or not 0<module_id<2**31:raise ValueError('invalid forum id')
-    html=client.html('/mod/forum/view.php',{'id':module_id})
+    try:
+        html=client.html('/mod/forum/view.php',{'id':module_id})
+    except MoodleRedirect as exc:
+        # A login redirect, external target, another course, or unexpected
+        # parameters is still an error. Never follow arbitrary redirects.
+        if (type(course_id) is int and course_id > 0
+            and exc.course_id == course_id):
+            raise ForumReturnedToCourse('forum returned to parent course') from exc
+        raise
     if len(html)>MAX_HTML:raise MoodleError('forum HTML too large')
     parser=DiscussionLinks(client.base)
     parser.feed(html)
@@ -217,7 +229,7 @@ def archive_forum(client,state,root,course,module,store_file,result,delay=0):
     from .pages import e,local_href,page,write_generated
     import requests
 
-    discussions=read_forum(client,module['id'])
+    discussions=read_forum(client,module['id'],course_id=course['id'])
     if not discussions:return 0,0
     relative=course_dir(course)/forum_dir(module)
     home=root/course_dir(course)/'index.html'
