@@ -159,7 +159,7 @@ def render_history(root:Path,entries:list[dict])->dict:
           'lokalna sinhronizacija v zadnjih 30 dneh. To ni seznam vseh sprememb na e.FE.</p>'
           +(f'<ul class="changes-list">{"".join(lines)}</ul>' if lines else
             '<p>V zadnjih 30 dneh ni zaznanih novih ali spremenjenih gradiv.</p>')
-          '</main>')
+          +'</main>')
     now=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
     write_generated(root,Path('Spletna-ucilnica/NOVOSTI.html'),
                    page('Novosti',body,now,home='index.html',status_href='STANJE.html'))
