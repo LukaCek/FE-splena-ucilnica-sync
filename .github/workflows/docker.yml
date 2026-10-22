@@ -46,7 +46,7 @@ jobs:
         with:
           images: ghcr.io/lukacek/fe-splena-ucilnica-sync
           tags: |
-            type=raw,value=beta1.8.1,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=beta1.9.0,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
       - uses: docker/build-push-action@v6
         with:
