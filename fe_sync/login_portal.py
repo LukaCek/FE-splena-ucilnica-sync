@@ -45,12 +45,13 @@ def private_base_url(value: str) -> str:
     try:
         u = urlsplit(value)
         addr = ipaddress.ip_address(u.hostname or "")
+        port = u.port
     except ValueError as exc:
         raise ValueError("FE_LOGIN_BASE_URL mora biti zaseben IPv4 NAS-a.") from exc
     if (u.scheme != "http" or not isinstance(addr, ipaddress.IPv4Address)
             or not any(addr in net for net in ALLOWED_PRIVATE)
             or u.username or u.password or u.path not in ("", "/")
-            or u.query or u.fragment or u.port != PORT):
+            or u.query or u.fragment or port != PORT):
         raise ValueError("Dovoljen je samo HTTP na Tailscale/LAN IPv4 in vratih 17899.")
     return "http://" + str(addr) + ":" + str(PORT)
 
@@ -62,6 +63,7 @@ def launch_page(url: str, access: str) -> str:
         '<!doctype html><html lang="sl"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         '<meta name="referrer" content="no-referrer">'
+        '<meta http-equiv="refresh" content="0;url=' + dest + '">'
         '<meta http-equiv="Content-Security-Policy" '
         'content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;">'
         '<title>Poveži spletno učilnico</title>'
@@ -254,6 +256,15 @@ class Portal:
             return
         await self.close_browser()
         self.current_status = "starting"
+        for _ in range(36):
+            try:
+                if (await self.http("GET", "/status", timeout=5) or {}).get("ready"):
+                    break
+            except Exception:
+                pass
+            await asyncio.sleep(2)
+        else:
+            raise RuntimeError("Selenium browser unavailable.")
         data = await self.http("POST", "/session", data={"capabilities": {
             "alwaysMatch": {"browserName": "chrome", "pageLoadStrategy": "none"}}}, timeout=90)
         if not isinstance(data, dict) or not isinstance(data.get("sessionId"), str):
@@ -348,9 +359,8 @@ class Portal:
         if not self.authorized(req) or not self.sid:
             raise web.HTTPForbidden()
         tail = req.match_info.get("tail", "")
-        if any(segment in ("..", "") for segment in tail.split("/")):
-            if tail not in ("",):
-                raise web.HTTPBadRequest()
+        if ".." in tail.split("/") or "\\" in tail:
+            raise web.HTTPBadRequest()
         assert self.client
         url = self.novnc_url + "/" + tail
         if req.query_string:
