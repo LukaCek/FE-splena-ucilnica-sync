@@ -3,7 +3,7 @@
 # Do NOT paste Moodle cookies or passwords into this Compose/GitHub.
 services:
   fe-moodle-sync:
-    image: ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.8.1
+    image: ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.9.0
     restart: unless-stopped
     command: ["python", "-m", "fe_sync", "loop"]
     environment:
@@ -58,7 +58,7 @@ services:
   # Single private entry point: browser + noVNC only reachable through this
   # authenticated gateway. NEVER bind to 0.0.0.0 or a public IP.
   fe-login:
-    image: ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.8.1
+    image: ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.9.0
     restart: unless-stopped
     command: ["python", "-m", "fe_sync", "login"]
     depends_on:
