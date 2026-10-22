@@ -161,3 +161,19 @@ def test_gateway_denies_browser_and_status_without_private_capability(tmp_path):
         finally:
             await client.close()
     asyncio.run(run())
+
+
+def test_login_link_is_added_to_existing_generated_index_only(tmp_path):
+    root = tmp_path / "FE"
+    folder = root / "Spletna-ucilnica"
+    folder.mkdir(parents=True)
+    home = folder / "index.html"
+    home.write_text(p.MARKER + '<nav class="top-links" aria-label="Glavna navigacija"><a href="STANJE.html">Stanje</a></nav>')
+    assert p.add_link_to_existing_home(root)
+    assert 'href="POVEZI.html"' in home.read_text()
+    assert home.read_text().count('href="POVEZI.html"') == 1
+    assert p.add_link_to_existing_home(root)
+    assert home.read_text().count('href="POVEZI.html"') == 1
+    home.write_text('<html>My own course notes</html>')
+    assert not p.add_link_to_existing_home(root)
+    assert "POVEZI" not in home.read_text()
