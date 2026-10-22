@@ -83,6 +83,27 @@ def launch_page(url: str, access: str) -> str:
     )
 
 
+def add_link_to_existing_home(fe_root: Path) -> bool:
+    """Make POVEZI immediately discoverable even while Moodle sync is failing.
+
+    Only alter a generated offline index, never a user-created document.
+    The regular renderer will own this navigation again on the next sync.
+    """
+    home = fe_root / "Spletna-ucilnica/index.html"
+    if not home.is_file() or home.is_symlink():
+        return False
+    original = home.read_text(encoding="utf-8")
+    anchor = '<nav class="top-links" aria-label="Glavna navigacija">'
+    if MARKER not in original or anchor not in original:
+        return False
+    if 'href="POVEZI.html"' in original:
+        return True
+    revised = original.replace(anchor,
+        anchor + '<a href="POVEZI.html">Poveži e.FE</a>', 1)
+    write_generated(fe_root, Path("Spletna-ucilnica/index.html"), revised)
+    return True
+
+
 def load_or_make_access(state: Path) -> str:
     state.mkdir(parents=True, exist_ok=True)
     p = state / LAUNCH_TOKEN_FILE
@@ -446,6 +467,7 @@ async def create_app(base_url=None, state=None, fe_root=None, secret=None):
     state, fe_root, secret = Path(state or STATE), Path(fe_root or FE_ROOT), Path(secret or COOKIE)
     access = load_or_make_access(state)
     write_launcher(fe_root, base_url, access)
+    add_link_to_existing_home(fe_root)
     portal = Portal(state, secret, fe_root, base_url, access)
     portal.client = ClientSession(timeout=ClientTimeout(total=40))
     app = web.Application(client_max_size=8192)
