@@ -13,7 +13,7 @@ def halt(_signal,_frame):stop.set()
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('mode',choices=['once','loop','render'])
+    parser.add_argument('mode',choices=['once','loop','render','login'])
     options=parser.parse_args()
     signal.signal(signal.SIGTERM,halt)
     signal.signal(signal.SIGINT,halt)
@@ -21,6 +21,9 @@ def main():
     state_dir=Path(os.environ.get('SYNC_STATE_DIR','/state'))
     cookie_file=Path(os.environ.get('FE_MOODLE_SESSION_FILE','/run/secrets/moodle-session-cookies.json'))
     state_dir.mkdir(parents=True,exist_ok=True)
+    if options.mode=='login':
+        from .login_portal import main as login_main
+        return login_main()
     if options.mode=='render':
         try:
             outcome=render_cached(fe_root,state_dir)
@@ -40,7 +43,18 @@ def main():
         atomic_json(state_dir,Path('status.json'),summary)
         print(json.dumps(summary,ensure_ascii=False),flush=True)
         if options.mode=='once':return 0 if summary['status']=='ok' else 1
-        stop.wait(interval)
+        deadline=__import__('time').monotonic()+interval
+        # Login portal creates sync.request only after verifying real Moodle access.
+        # Wake within seconds without running a second concurrent sync process.
+        while not stop.is_set():
+            flag=state_dir/'sync.request'
+            if flag.is_file() and not flag.is_symlink():
+                flag.unlink()
+                break
+            remain=deadline-__import__('time').monotonic()
+            if remain<=0:
+                break
+            stop.wait(min(5,remain))
     return 0
 
 if __name__=='__main__':raise SystemExit(main())
