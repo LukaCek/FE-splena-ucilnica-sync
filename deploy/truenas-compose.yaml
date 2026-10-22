@@ -3,7 +3,7 @@
 # Do NOT paste Moodle cookies or passwords into this Compose/GitHub.
 services:
   fe-moodle-sync:
-    image: ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.8
+    image: ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.9.0
     restart: unless-stopped
     command: ["python", "-m", "fe_sync", "loop"]
     environment:
@@ -38,3 +38,55 @@ services:
       timeout: 10s
       retries: 2
       start_period: 20m
+
+
+  # Login browser: no ports are exposed on the TrueNAS host.
+  fe-login-browser:
+    image: selenium/standalone-chromium:4.48.0-20260905
+    restart: unless-stopped
+    shm_size: 1gb
+    environment:
+      SE_VNC_NO_PASSWORD: "true"
+      SE_NODE_SESSION_TIMEOUT: "1800"
+      SE_SCREEN_WIDTH: "1280"
+      SE_SCREEN_HEIGHT: "900"
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 2g
+    networks: [login_internal]
+
+  # Single private entry point: browser + noVNC only reachable through this
+  # authenticated gateway. NEVER bind to 0.0.0.0 or a public IP.
+  fe-login:
+    image: ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.9.0
+    restart: unless-stopped
+    command: ["python", "-m", "fe_sync", "login"]
+    depends_on:
+      - fe-login-browser
+    environment:
+      FE_ROOT: /data/FE
+      SYNC_STATE_DIR: /state
+      FE_MOODLE_SESSION_FILE: /run/secrets/moodle-session-cookies.json
+      FE_LOGIN_BASE_URL: "http://${FE_LOGIN_PRIVATE_IP:?Set a TrueNAS Tailscale IPv4 address}:17899"
+      FE_LOGIN_WEBDRIVER: http://fe-login-browser:4444
+      FE_LOGIN_NOVNC: http://fe-login-browser:7900
+    ports:
+      - "${FE_LOGIN_PRIVATE_IP:?Set a TrueNAS Tailscale IPv4 address}:17899:17899"
+    volumes:
+      - /mnt/tank/sync/FE:/data/FE:ro
+      - /mnt/tank/sync/FE/Spletna-ucilnica:/data/FE/Spletna-ucilnica:rw
+      - /mnt/tank/apps/fe-moodle-sync/state:/state:rw
+      # Mutable original file inode required for Docker bind mount consistency.
+      - /mnt/tank/apps/fe-moodle-sync/secrets/moodle-session-cookies.json:/run/secrets/moodle-session-cookies.json:rw
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    pids_limit: 64
+    mem_limit: 256m
+    networks: [login_internal]
+
+networks:
+  login_internal:
+    driver: bridge

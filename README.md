@@ -37,6 +37,11 @@ Po uspešni sinhronizaciji se samodejno ustvarijo pregledne, **povsem lokalne** 
 - Če se SSO seja izteče ali je vezana na napravo/IP, bo sinhronizacija obstala; potrebna je ponovna ročna prijava in osvežitev datoteke piškotkov. V Dockerju **ni** shranjenega gesla.
 - Študentska prijavna seja nima strežniško omejenih pravic branja; koda pa nima funkcij za oddajo, kviz ali spreminjanje učilnice. Moodle lahko beleži obisk strani.
 
+## beta1.9.0 — prijava v e.FE z enim klikom iz FE mape
+
+Nova storitev `fe-login` z zasebnim Chromiumom prek Selenium/noVNC omogoča obnovitev računa UL SSO na telefonu brez prenosnika. Ob prvem zagonu ustvari `Spletna-ucilnica/POVEZI.html`. Klik samodejno odpre zasebni portal, ki zažene Chromium, preveri Moodle sejo in sproži takojšnjo sinhronizacijo. Potreben je TrueNAS Tailscale IPv4 naslov v Compose datoteki (glej [navodila](docs/one-click-login.md)). Brskalnik nima neposredno objavljenih vrat in portal nima dostopa do Docker socketa. Zasnovano za enega uporabnika, ne za javno komercialno prijavo.
+
+
 ## Namestitev na TrueNAS SCALE
 
 Predpogoj: FE Syncthing mapa je `/mnt/tank/sync/FE`; obstoječi FE Gradiva servis ostane nespremenjen. Ta servis ne namestiš v isto Compose aplikacijo kot FE Gradiva. Vsi koraki s skrivnostmi naj potekajo izključno lokalno, ne prek GitHuba ali ChatGPT.

@@ -115,6 +115,10 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
                 f'čaka {pdf_pending}, brez besedila {pdf_no_text}, delno {pdf_part}.'
                 if 'total' in pdf else
                 'Iskanje PDF: indeks še ni na voljo.')
+    login_link_exists=(root/'Spletna-ucilnica/POVEZI.html').is_file()
+    login_text=(('Za obnovitev prijave odpri Spletna-ucilnica/POVEZI.html.\n')
+                if login_link_exists else
+                'Na prenosniku obnovi sejo: bash ~/Downloads/obnovi-sejo.sh\n')
     txt = (f'{TEXT_MARKER}\n\nLOKALNA SPLETNA UČILNICA FE\n'
            f'Zadnja uspešna osvežitev: {last_label}\n'
            f'Zadnji poskus: {check_label}\n'
@@ -125,8 +129,7 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
            f'Koledar e.FE: {calendar_label}\n'
            f'Novosti zadnjih 30 dni: {recent_count}\n'
            f'{pdf_notice}\n\n'
-           'Ko seja poteče, na prenosniku izvedi:\n'
-           'bash ~/Downloads/obnovi-sejo.sh\n'
+           f'{login_text}'
            'Prijava prek UL SSO je ročna. Piškotki ostanejo zunaj mape FE.\n')
     colors = {'ok':'#156848','partial':'#926208','failed':'#b3261e',
               'unknown':'#555'}
@@ -158,9 +161,10 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
             f'<p>{h(pdf_notice)} <a href="ISKANJE.html">Iskanje vseh gradiv</a></p>'
             f'{f"<p>Vrsta napake: {h(reason)}</p>" if reason else ""}'
             '<hr><h2>Ko prijava poteče</h2>'
-            '<p>Na prenosniku zaženi <code>bash ~/Downloads/obnovi-sejo.sh</code>. '
-            'Skripta odpre Chromium za UL SSO in varno posodobi sejo na NAS-u.</p>'
-            '<p>Geslo in prijavni piškotki niso shranjeni v mapi FE.</p>'
+            + ('<p><a href="POVEZI.html">Odpri zasebno prijavo v e.FE →</a></p>'
+               if login_link_exists else
+               '<p>Na prenosniku zaženi <code>bash ~/Downloads/obnovi-sejo.sh</code>.</p>')
+            + '<p>Geslo in prijavni piškotki niso shranjeni v mapi FE.</p>'
             '<p><a href="https://ucilnica-fe.uni-lj.si">Izvirna e.FE</a></p>'
             '</main></body></html>\n')
     write_generated(root, STATUS_DIR / 'STANJE.html', html)
