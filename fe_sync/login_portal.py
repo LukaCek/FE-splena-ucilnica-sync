@@ -268,9 +268,10 @@ class Portal:
         self.poller = asyncio.create_task(self.watch_login(self.sid))
 
     async def close_browser(self):
-        if self.poller:
-            self.poller.cancel()
-            self.poller = None
+        task, self.poller = self.poller, None
+        if task and task is not asyncio.current_task():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
         sid, self.sid = self.sid, None
         if sid:
             try:
@@ -298,7 +299,6 @@ class Portal:
                     self.current_status = "login"
                     continue
                 self.current_status = "synced"
-                self.authorizations.clear()
                 await self.close_browser()
                 return
         except asyncio.CancelledError:
@@ -449,9 +449,9 @@ async def create_app(base_url=None, state=None, fe_root=None, secret=None):
 def main():
     from aiohttp import web as aio_web
     base = private_base_url(os.environ["FE_LOGIN_BASE_URL"])
-    app = asyncio.run(create_app(base_url=base))
+    # run_app takes the async factory and starts it in its own event loop.
     # Port mapping on the TrueNAS host MUST target its private Tailscale IPv4.
-    aio_web.run_app(app, host="0.0.0.0", port=PORT, print=None)
+    aio_web.run_app(create_app(base_url=base), host="0.0.0.0", port=PORT, print=None)
 
 
 if __name__ == "__main__":
