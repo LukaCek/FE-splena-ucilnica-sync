@@ -450,8 +450,9 @@ async def create_app(base_url=None, state=None, fe_root=None, secret=None):
     portal.client = ClientSession(timeout=ClientTimeout(total=40))
     app = web.Application(client_max_size=8192)
     app["portal"] = portal
-    app.router.add_get("/connect", lambda req: security_headers(
-        web.Response(text=portal_html(), content_type="text/html")))
+    async def connect_page(req):
+        return security_headers(web.Response(text=portal_html(), content_type="text/html"))
+    app.router.add_get("/connect", connect_page)
     app.router.add_post("/api/begin", portal.begin)
     app.router.add_get("/api/status", portal.status)
     app.router.add_get("/viewer/websockify", portal.websocket)
