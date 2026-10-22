@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import signal
 import threading
+import time
 from .sync import run_sync, atomic_json, render_cached
 from .status import publish_status
 
@@ -43,7 +44,7 @@ def main():
         atomic_json(state_dir,Path('status.json'),summary)
         print(json.dumps(summary,ensure_ascii=False),flush=True)
         if options.mode=='once':return 0 if summary['status']=='ok' else 1
-        deadline=__import__('time').monotonic()+interval
+        deadline=time.monotonic()+interval
         # Login portal creates sync.request only after verifying real Moodle access.
         # Wake within seconds without running a second concurrent sync process.
         while not stop.is_set():
@@ -51,7 +52,7 @@ def main():
             if flag.is_file() and not flag.is_symlink():
                 flag.unlink()
                 break
-            remain=deadline-__import__('time').monotonic()
+            remain=deadline-time.monotonic()
             if remain<=0:
                 break
             stop.wait(min(5,remain))
