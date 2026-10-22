@@ -26,6 +26,10 @@ jobs:
         run: |
           python -c "from fe_sync.pages import SCRIPT; from pathlib import Path; Path('/tmp/fe-moodle-ui.js').write_text(SCRIPT)"
           node --check /tmp/fe-moodle-ui.js
+      - name: Validate private TrueNAS Compose
+        env:
+          FE_LOGIN_PRIVATE_IP: 100.64.1.1
+        run: docker compose -f deploy/truenas-compose.yaml config -q
       - run: docker build -t fe-moodle-sync:test .
       - name: Test image imports and entrypoint
         run: docker run --rm fe-moodle-sync:test python -m fe_sync --help
