@@ -116,9 +116,9 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
                 if 'total' in pdf else
                 'Iskanje PDF: indeks še ni na voljo.')
     login_link_exists=(root/'Spletna-ucilnica/POVEZI.html').is_file()
-    login_text=(('Za obnovitev prijave odpri Spletna-ucilnica/POVEZI.html.\\n')
+    login_text=(('Za obnovitev prijave odpri Spletna-ucilnica/POVEZI.html.\n')
                 if login_link_exists else
-                'Na prenosniku obnovi sejo: bash ~/Downloads/obnovi-sejo.sh\\n')
+                'Na prenosniku obnovi sejo: bash ~/Downloads/obnovi-sejo.sh\n')
     txt = (f'{TEXT_MARKER}\n\nLOKALNA SPLETNA UČILNICA FE\n'
            f'Zadnja uspešna osvežitev: {last_label}\n'
            f'Zadnji poskus: {check_label}\n'
@@ -164,7 +164,7 @@ def publish_status(root: Path, state_dir: Path, summary: dict) -> dict:
             + ('<p><a href="POVEZI.html">Odpri zasebno prijavo v e.FE →</a></p>'
                if login_link_exists else
                '<p>Na prenosniku zaženi <code>bash ~/Downloads/obnovi-sejo.sh</code>.</p>')
-            '<p>Geslo in prijavni piškotki niso shranjeni v mapi FE.</p>'
+            + '<p>Geslo in prijavni piškotki niso shranjeni v mapi FE.</p>'
             '<p><a href="https://ucilnica-fe.uni-lj.si">Izvirna e.FE</a></p>'
             '</main></body></html>\n')
     write_generated(root, STATUS_DIR / 'STANJE.html', html)
