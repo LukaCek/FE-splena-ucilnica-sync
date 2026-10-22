@@ -316,6 +316,10 @@ class Portal:
             return
         except Exception:
             self.current_status = "error"
+        finally:
+            if self.sid == sid:
+                await self.close_browser()
+                self.current_status = "error"
 
     def verify_and_persist(self, cookies: list[dict]) -> None:
         """Never overwrite the existing secret before a successful Moodle read."""
@@ -372,8 +376,11 @@ class Portal:
                 "Content-Type": upstream.headers.get("Content-Type", "application/octet-stream"),
                 "Cache-Control": "no-store",
             }
-            return security_headers(web.Response(status=upstream.status, body=body,
-                                                 headers=headers))
+            page_response = security_headers(web.Response(status=upstream.status,
+                                                         body=body, headers=headers))
+            # noVNC UI is intentionally embedded by this SAME-ORIGIN portal.
+            page_response.headers["X-Frame-Options"] = "SAMEORIGIN"
+            return page_response
 
     async def websocket(self, req: web.Request):
         if not self.authorized(req) or not self.sid:
