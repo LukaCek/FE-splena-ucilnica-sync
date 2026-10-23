@@ -184,9 +184,10 @@ def test_novnc_websocket_path_points_to_authenticated_gateway_route():
     from urllib.parse import parse_qs, urljoin, urlsplit
     import re
     script = p.portal_html()
-    match = re.search(r'viewer\.src\s*=\s*"([^"]+)"', script)
-    assert match is not None
-    url = urlsplit(match.group(1))
+    assignments = re.findall(r'viewer\.src\s*=\s*"([^"]+)"', script)
+    viewer_urls = [value for value in assignments if value.startswith("/viewer/")]
+    assert len(viewer_urls) == 1
+    url = urlsplit(viewer_urls[0])
     assert url.path == "/viewer/vnc.html"
     websocket_target = parse_qs(url.query)["path"][0]
     assert urljoin("http://nas.local/viewer/vnc.html", websocket_target) == (
