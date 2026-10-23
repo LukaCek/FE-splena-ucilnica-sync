@@ -177,3 +177,82 @@ def test_login_link_is_added_to_existing_generated_index_only(tmp_path):
     home.write_text('<html>My own course notes</html>')
     assert not p.add_link_to_existing_home(root)
     assert "POVEZI" not in home.read_text()
+
+
+def test_novnc_websocket_path_points_to_authenticated_gateway_route():
+    """noVNC resolves 'path' relative to /viewer/vnc.html, not site root."""
+    from urllib.parse import parse_qs, urljoin, urlsplit
+    import re
+    script = p.portal_html()
+    match = re.search(r'viewer\.src\s*=\s*"([^"]+)"', script)
+    assert match is not None
+    url = urlsplit(match.group(1))
+    assert url.path == "/viewer/vnc.html"
+    websocket_target = parse_qs(url.query)["path"][0]
+    assert urljoin("http://nas.local/viewer/vnc.html", websocket_target) == (
+        "http://nas.local/viewer/websockify"
+    )
+
+
+def test_novnc_websocket_relay_preserves_vnc_binary_frames(tmp_path):
+    """Authenticated frontend must actually reach the upstream WebSocket."""
+    from aiohttp import web, WSMsgType
+
+    async def run():
+        async def upstream_ws(req):
+            ws = web.WebSocketResponse()
+            await ws.prepare(req)
+            await ws.send_bytes(b"RFB 003.008\n")
+            async for msg in ws:
+                if msg.type == WSMsgType.BINARY:
+                    await ws.send_bytes(msg.data)
+            return ws
+
+        upstream_app = web.Application()
+        upstream_app.router.add_get("/websockify", upstream_ws)
+        backend = TestServer(upstream_app)
+        await backend.start_server()
+        root = tmp_path / "FE"
+        (root / "Spletna-ucilnica").mkdir(parents=True)
+        state = tmp_path / "state"
+        app = await p.create_app(
+            base_url="http://100.75.1.2:17899", state=state,
+            fe_root=root, secret=tmp_path / "session.json")
+        portal = app["portal"]
+        portal.novnc_url = str(backend.make_url("/")).rstrip("/")
+
+        async def fake_browser():
+            portal.sid = "selenium-test-session"
+            portal.current_status = "login"
+
+        async def fake_close_browser():
+            portal.sid = None
+
+        portal.ensure_browser = fake_browser
+        portal.close_browser = fake_close_browser
+
+        frontend = TestClient(TestServer(app))
+        await frontend.start_server()
+        try:
+            # Before successful activation, VNC access is denied.
+            response = await frontend.get("/viewer/vnc.html")
+            assert response.status == 403
+
+            # Activate the single authorized owner via the private link.
+            token = p.load_or_make_access(state)
+            response = await frontend.post("/api/begin", json={"access": token})
+            assert response.status == 200
+
+            async with frontend.ws_connect("/viewer/websockify") as ws:
+                greeting = await ws.receive(timeout=4)
+                assert greeting.type == WSMsgType.BINARY
+                assert greeting.data == b"RFB 003.008\n"
+                await ws.send_bytes(b"vnc-frame-test")
+                result = await ws.receive(timeout=4)
+                assert result.type == WSMsgType.BINARY
+                assert result.data == b"vnc-frame-test"
+        finally:
+            await frontend.close()
+            await backend.close()
+
+    asyncio.run(run())
