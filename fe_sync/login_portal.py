@@ -195,7 +195,7 @@ async function status() {
     showState(j.status);
     if (j.status === "login" || j.status === "verifying") {
       if (viewer.hidden) {
-        viewer.src = "/viewer/vnc.html?autoconnect=1&resize=scale&path=viewer/websockify";
+        viewer.src = "/viewer/vnc.html?autoconnect=1&resize=scale&path=%2Fviewer%2Fwebsockify";
         viewer.hidden = false;
       }
     }
