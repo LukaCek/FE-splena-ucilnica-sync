@@ -195,13 +195,13 @@ def write_note(root,relative,title,body,source):
     write_text(root,relative,txt)
 
 
-def render_text_html(title,body,doc_dir,course_index,source,files=()):
+def render_text_html(title,body,doc_dir,course_index,source,files=(),rich_html=None):
     from .pages import e,local_href,page
     href=local_href(doc_dir,course_index)
     links=''.join(f'<li><a href="{e(local_href(doc_dir,p))}">{e(p.name)}</a></li>' for p in files)
     contents=(f'<div class="breadcrumb"><a href="{e(href)}">← Nazaj na predmet</a></div>'
               f'<main class="course-shell" id="content"><h1>{e(title)}</h1>'
-              f'<div style="white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7">{e(body)}</div>'
+              f'<div class="moodle-content{" moodle-plain" if rich_html is None else ""}">{rich_html if rich_html is not None else e(body)}</div>'
               +(f'<h2>Priloge</h2><ul>{links}</ul>' if links else '')
               +f'<p class="footer"><a href="{e(source)}" target="_blank" rel="noopener noreferrer">'
               'Izvirnik na e.FE ↗</a></p></main>')
@@ -211,15 +211,20 @@ def render_text_html(title,body,doc_dir,course_index,source,files=()):
 def archive_page(client,root,course,module):
     from .sync import course_dir
     from .pages import write_generated
-    body=read_page(client,module['id'])
+    # Fetch once: preserve both searchable plain-text notes and a separately
+    # sanitized rich HTML view (tables, headings, and safe hyperlinks).
+    markup=client.html('/mod/page/view.php',{'id':module['id']})
+    body=extract_body(markup,'page')
     if not body:return False
+    from .rich_html import render_moodle_content
+    rich_html=render_moodle_content(markup,getattr(client,'base',BASE))
     relative=course_dir(course)/page_dir(module)
     title=safe_title(module)
     source=f'{BASE}/mod/page/view.php?id={module["id"]}'
     write_note(root,relative/'vsebina.md',title,body,source)
     write_generated(root,relative/'index.html',
         render_text_html(title,body,root/relative,
-                         root/course_dir(course)/'index.html',source))
+                         root/course_dir(course)/'index.html',source,rich_html=rich_html))
     return True
 
 
