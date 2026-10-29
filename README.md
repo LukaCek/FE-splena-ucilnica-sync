@@ -495,3 +495,23 @@ Sprememba ne spreminja PDF-jev, SQLite predpomnilnika, pravic,
 sejnih piškotkov ali vsebine iskalnega indeksa. Če beta1.8 zaključi
 sinhronizacijo s statusom \`ok\` in poljem \`pdf_index\`, lahko ostane
 nameščena; beta1.8.1 je neobvezna izboljšava diagnostike.
+
+
+## beta1.9.2 — popravljeno oblikovanje Moodle strani v lokalni učilnici
+
+- Strani \`page\` ohranijo varno HTML strukturo: tabele, naslove, sezname,
+  povezave in združene celice. Posebej pomembno za \`Video gradiva za
+  posamezno predavanje\` pri Osnovah elektrotehnike I.
+- Široke tabele so vodoravno pomične na tablici/telefonu, ne pretvorjene
+  v zaporedje besed brez stolpcev.
+- Zunanje povezave na videe ostanejo klikljive, a se **ne prenesejo**;
+  varnostni pregled sprejme samo HTTPS in odstrani nevarne URL-je,
+  sesskey in žetone. Moodlejeve skripte/obrazci/iframe-i in atributi
+  za dogodke se nikoli ne vključijo v lokalno stran.
+- Navadna \`.md\` datoteka se še vedno ustvarja za FE Gradiva in iskanje.
+- Pri neznani Moodle strukturi se uporablja prejšnji varni besedilni prikaz.
+- Strani se osvežijo šele ob uspešnem novem sinhronizacijskem ciklu.
+  Obstoječi PDF-ji, zapiski, seje in SQLite ostanejo nedotaknjeni.
+
+TrueNAS (samo image tag, isti volume):
+\`ghcr.io/lukacek/fe-splena-ucilnica-sync:beta1.9.2\`

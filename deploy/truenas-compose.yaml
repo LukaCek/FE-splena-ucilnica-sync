@@ -1,4 +1,4 @@
-# TrueNAS SCALE Custom App — FE Moodle Sync beta1.9.1
+# TrueNAS SCALE Custom App — FE Moodle Sync beta1.9.2
 # Create the five writable FE target folders and secrets/state folders first.
 # Do NOT paste Moodle cookies or passwords into this Compose/GitHub.
 services:
