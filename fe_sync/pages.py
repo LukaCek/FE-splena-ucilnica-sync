@@ -210,6 +210,7 @@ filterGlobalResults();
 STYLE += r'''
 /* beta1.9.2: original Moodle tables preserved in safe offline snapshots. */
 .moodle-content{font-size:14px;line-height:1.65;overflow-wrap:anywhere;max-width:100%;min-width:0}
+.moodle-content.moodle-plain{white-space:pre-wrap}
 .moodle-content p{margin:10px 0}.moodle-content h2,.moodle-content h3,
 .moodle-content h4{margin:18px 0 9px;line-height:1.3}
 .moodle-content ul,.moodle-content ol{padding-left:24px}
