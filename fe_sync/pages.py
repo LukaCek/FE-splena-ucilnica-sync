@@ -207,6 +207,33 @@ showFavorites();
 filterGlobalResults();
 '''
 
+STYLE += r'''
+/* beta1.9.2: original Moodle tables preserved in safe offline snapshots. */
+.moodle-content{font-size:14px;line-height:1.65;overflow-wrap:anywhere;max-width:100%;min-width:0}
+.moodle-content p{margin:10px 0}.moodle-content h2,.moodle-content h3,
+.moodle-content h4{margin:18px 0 9px;line-height:1.3}
+.moodle-content ul,.moodle-content ol{padding-left:24px}
+.moodle-content a{color:#0864a0;text-decoration:underline;text-underline-offset:2px}
+.moodle-content a:hover,.moodle-content a:focus-visible{color:#b31b1b}
+.moodle-content .moodle-table-scroll{width:100%;max-width:100%;overflow-x:auto;
+ overflow-y:hidden;margin:16px 0;border:1px solid #d3d9de;border-radius:5px;
+ -webkit-overflow-scrolling:touch}
+.moodle-content table{border-collapse:collapse;width:max-content;min-width:100%;
+ background:#fff;color:#25282c;font-size:12.5px;line-height:1.5}
+.moodle-content td,.moodle-content th{border:1px solid #c7cdd2;
+ padding:8px 10px;min-width:86px;vertical-align:top;
+ overflow-wrap:normal;word-break:normal;white-space:normal}
+.moodle-content th{background:#f2f5f7;font-weight:650;text-align:left}
+.moodle-content tr:nth-child(even) td{background:#f8fafc}
+.moodle-content td a,.moodle-content th a{white-space:normal}
+.moodle-content blockquote{margin:12px 0;padding:8px 14px;border-left:3px solid #bacad8}
+.moodle-content pre{max-width:100%;overflow:auto;background:#f3f5f7;padding:11px}
+.moodle-content .moodle-image-alt{color:#697581;font-style:italic}
+@media(max-width:560px){.moodle-content{font-size:13px}
+ .moodle-content td,.moodle-content th{font-size:12px;padding:7px 8px;min-width:105px}}
+'''
+
+
 ICONS = {
  'folder':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 3h9v10H3z"/></svg>',
  'forum':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v13H9l-5 4zM8 9h8M8 12h6"/></svg>',
