@@ -201,7 +201,7 @@ def render_text_html(title,body,doc_dir,course_index,source,files=(),rich_html=N
     links=''.join(f'<li><a href="{e(local_href(doc_dir,p))}">{e(p.name)}</a></li>' for p in files)
     contents=(f'<div class="breadcrumb"><a href="{e(href)}">← Nazaj na predmet</a></div>'
               f'<main class="course-shell" id="content"><h1>{e(title)}</h1>'
-              f'<div class="moodle-content">{rich_html if rich_html is not None else e(body)}</div>'
+              f'<div class="moodle-content{" moodle-plain" if rich_html is None else ""}">{rich_html if rich_html is not None else e(body)}</div>'
               +(f'<h2>Priloge</h2><ul>{links}</ul>' if links else '')
               +f'<p class="footer"><a href="{e(source)}" target="_blank" rel="noopener noreferrer">'
               'Izvirnik na e.FE ↗</a></p></main>')
